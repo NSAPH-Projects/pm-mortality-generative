@@ -1,0 +1,5 @@
+data/*
+notebooks/*
+!notebooks/.gitkeep
+!notebooks/data_formation.ipynb
+!notebooks/tutorial.ipynb
