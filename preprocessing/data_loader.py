@@ -22,20 +22,23 @@ class ClimateDataset(Dataset):
         month = self.months[idx]
         arr= []
         for component in self.components:
-            file_path = f"{root}/{component}/GWRwSPEC_{component}_NA_{month}_{month}.nc" 
-            ds = xr.open_dataset(file_path)
-            arr.append(ds.values)
+            file_path = f"{root}/{component}/GWRwSPEC_{component}_NA_{month}_{month}"
+            if(component=="PM25"): file_path = file_path + "-RH35"
+            file_path = file_path + ".nc"
+            print(file_path)
+            ds = xr.open_dataset(file_path, engine="h5netcdf")
+            item_values = ds[component].values
+            arr.append(item_values)
         
         return np.stack(arr, axis=0)
 
-
-
 if __name__ == "__main__":
-    root = "../data/climate-monthly/netcdf"
-    components = ["PM25","NH4"]
-    years = [2010, 2011, 2012]
+    root = "./data/climate-monthly/netcdf"
+    components = ["PM25", "BC"]
+    years = [2016, 2017, 2018]
     dataset = ClimateDataset(root, components, years)
     loader = DataLoader(dataset, batch_size=1, shuffle=True)
+
     for i, data in enumerate(loader):
         print(data.shape)
         if i == 5:
