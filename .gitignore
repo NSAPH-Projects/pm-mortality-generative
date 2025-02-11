@@ -3,3 +3,5 @@ notebooks/*
 !notebooks/.gitkeep
 !notebooks/data_formation.ipynb
 !notebooks/tutorial.ipynb
+preprocessing/__pycache__/
+.DS_Store

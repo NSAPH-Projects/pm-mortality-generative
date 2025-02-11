@@ -1,20 +1,24 @@
 from torch.utils.data import Dataset, DataLoader
 import xarray as xr
 import numpy as np
+import torchvision.transforms as transforms
+from os import getcwd
+import torch
 
 class ClimateDataset(Dataset):
-    def __init__(self, root, components, years):
+    def __init__(self, root, components, years, as_numpy=False, transformations=None):
         self.root = root
         self.components = components
         self.years = years
+        self.as_numpy = as_numpy
+        self.transformations = transformations
 
         # make a list of all months for the given years
         self.months = []
         for year in years:
             for month in range(1, 13):
                 self.months.append(f"{year}{month:02d}")
-        
-
+    
     def __len__(self):
         return len(self.months)
 
@@ -22,22 +26,29 @@ class ClimateDataset(Dataset):
         month = self.months[idx]
         arr= []
         for component in self.components:
-            file_path = f"{root}/{component}/GWRwSPEC_{component}_NA_{month}_{month}"
+            file_path = f"{self.root}/{component}/GWRwSPEC_{component}_NA_{month}_{month}"
             if(component=="PM25"): file_path = file_path + "-RH35"
             file_path = file_path + ".nc"
-            print(file_path)
             ds = xr.open_dataset(file_path, engine="h5netcdf")
             item_values = ds[component].values
-            arr.append(item_values)
+            tensor_values = torch.from_numpy(item_values)
+            arr.append(tensor_values)
         
-        return np.stack(arr, axis=0)
+        tensor = torch.stack(arr, dim=0)
+        if self.transformations:
+            tensor = self.transformations(tensor)
+
+        tensor = torch.nan_to_num(tensor, nan=0.0, posinf=1.0, neginf=-1.0)
+
+        return tensor
 
 if __name__ == "__main__":
     root = "./data/climate-monthly/netcdf"
     components = ["PM25", "BC"]
-    years = [2016, 2017, 2018]
-    dataset = ClimateDataset(root, components, years)
-    loader = DataLoader(dataset, batch_size=1, shuffle=True)
+    years = [2013, 2014, 2015, 2016]
+    transformations = transforms.Resize((128, 256))
+    dataset = ClimateDataset(root, components, years, transformations=transformations)
+    loader = DataLoader(dataset, batch_size=3, shuffle=True)
 
     for i, data in enumerate(loader):
         print(data.shape)
