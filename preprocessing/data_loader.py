@@ -22,13 +22,22 @@ class ClimateDataset(Dataset):
     def __len__(self):
         return len(self.months)
 
+    def prepare_file_path(self, month, component):
+        file_path = f"{self.root}/{component}/GWRwSPEC"
+        # for years starting at 2017, add the extension .HEI
+        if(int(month) > 201700): file_path =  file_path + ".HEI"
+
+        file_path = file_path +  f"_{component}_NA_{month}_{month}"
+        if(component=="PM25"): file_path = file_path + "-RH35"
+        
+        file_path = file_path + ".nc"
+        return file_path
+
     def __getitem__(self, idx):
         month = self.months[idx]
         arr= []
         for component in self.components:
-            file_path = f"{self.root}/{component}/GWRwSPEC_{component}_NA_{month}_{month}"
-            if(component=="PM25"): file_path = file_path + "-RH35"
-            file_path = file_path + ".nc"
+            file_path = self.prepare_file_path(month, component)
             ds = xr.open_dataset(file_path, engine="h5netcdf")
             item_values = ds[component].values
             tensor_values = torch.from_numpy(item_values)
