@@ -34,7 +34,7 @@ def save_generated_images(images, save_dir):
     print(f"Generated images saved in '{save_dir}' under separate folders for each outcome variable.")
 
 
-def generate_samples_from_noise(vae, device, batch_size=4, latent_dim=(4, 128, 256), save_dir="./preprocessing/generated_samples"):
+def generate_samples_from_noise(vae, device, batch_size=6, latent_dim=(4, 128, 256), save_dir="./preprocessing/generated_samples"):
     # Sample random latent vectors
     latent_shape = (batch_size, *latent_dim)
     random_latents = torch.randn(latent_shape).to(device)
@@ -94,7 +94,7 @@ if __name__ == "__main__":
     dataloader = DataLoader(dataset, batch_size=6, shuffle=False)
     
     # Generate samples from random noise
-    generate_samples_from_noise(vae, device)
+    generate_samples_from_noise(vae,batch_size=6, device=device)
     
     # Reconstruct samples via VAE
     reconstruct_samples_via_vae(vae, dataloader, device)

@@ -1,2 +1,33 @@
 VAE model initialized.
 VAE Epoch 1, Average Loss: 69.9204
+VAE Epoch 2, Average Loss: 17.4871
+VAE Epoch 3, Average Loss: 13.2334
+VAE Epoch 4, Average Loss: 11.4849
+VAE Epoch 5, Average Loss: 10.6465
+VAE Epoch 6, Average Loss: 10.1061
+VAE Epoch 7, Average Loss: 9.7647
+VAE Epoch 8, Average Loss: 9.5197
+VAE Epoch 9, Average Loss: 9.3744
+VAE Epoch 10, Average Loss: 9.1906
+VAE Epoch 11, Average Loss: 9.1746
+VAE Epoch 12, Average Loss: 9.0142
+VAE Epoch 13, Average Loss: 8.9007
+VAE Epoch 14, Average Loss: 8.8216
+VAE Epoch 15, Average Loss: 8.7634
+VAE Epoch 16, Average Loss: 8.6999
+VAE Epoch 17, Average Loss: 8.6505
+VAE Epoch 18, Average Loss: 8.5967
+VAE Epoch 19, Average Loss: 8.5978
+VAE Epoch 20, Average Loss: 8.5420
+VAE Epoch 21, Average Loss: 8.5172
+VAE Epoch 22, Average Loss: 8.4863
+VAE Epoch 23, Average Loss: 8.5014
+VAE Epoch 24, Average Loss: 8.5157
+VAE Epoch 25, Average Loss: 8.4616
+VAE Epoch 26, Average Loss: 8.4089
+VAE Epoch 27, Average Loss: 8.4584
+VAE Epoch 28, Average Loss: 8.5611
+VAE Epoch 29, Average Loss: 8.3523
+VAE Epoch 30, Average Loss: 8.4198
+VAE model saved.
+Training complete.

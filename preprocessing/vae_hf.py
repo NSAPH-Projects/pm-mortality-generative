@@ -78,11 +78,12 @@ if __name__ == "__main__":
     #list years between 2000 and 2017, (many outcomes don't have 2018 data)
     years = list(range(2000, 2018))
     
-    #try different values of img_size and find the best one 
-    dataloader = initialize_data_loader(components, years, batch_size=6, img_size=(256, 512))
+    #try different values of img_size and find the best one
+    #experiments with 256,512 batch size was 6. Want to train faster
+    dataloader = initialize_data_loader(components, years, batch_size=30, img_size=(128, 256))
 
     vae = initialize_vae(device, num_channels=len(components))
     print("VAE model initialized.")
   
-    train_vae(vae,dataloader, num_epochs=30, lr=1e-4)
+    train_vae(vae,dataloader, num_epochs=170, lr=1e-5, kl_weight=0.01)
     print("Training complete.")
