@@ -14,7 +14,7 @@ sys.path.append(os.path.join(os.getcwd(), "dataloader"))
 #sys.path.append("/n/dominici_lab/lab/projects/pm-mortality-generative/ahmet/pm-mortality-generative/dataloader")
 #sys.path.append("/Users/oahmet/Projects/pm-mortality-generative/dataloader")
 # Print the Python path to verify
-print("Python path:", sys.path)
+#print("Python path:", sys.path)
 
 from climate_data_handling import initialize_data_loader
 
