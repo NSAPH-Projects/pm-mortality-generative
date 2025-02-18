@@ -4,4 +4,5 @@ notebooks/*
 !notebooks/data_formation.ipynb
 !notebooks/tutorial.ipynb
 preprocessing/__pycache__/
+models/sd_vae/*
 .DS_Store

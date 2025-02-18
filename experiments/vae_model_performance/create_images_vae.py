@@ -5,14 +5,24 @@ import numpy as np
 import os
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
-from data_loader import ClimateDataset
 
-def load_trained_vae(device):
+import sys
+import os
+
+# Add the dataloader directory to the Python path
+sys.path.append("/n/dominici_lab/lab/projects/pm-mortality-generative/ahmet/pm-mortality-generative/dataloader")
+
+# Print the Python path to verify
+print("Python path:", sys.path)
+
+from dataloader import ClimateDataset
+
+def load_trained_vae(device, model_name):
     # Load the trained VAE model
-    vae = AutoencoderKL.from_pretrained("./models/custom_vae").to(device)
+    model_path = f"./models/{model_name}"
+    vae = AutoencoderKL.from_pretrained(model_path).to(device)
     vae.eval()  # Set to evaluation mode
     return vae
-
 
 def save_generated_images(images, save_dir):
     # Convert to NumPy for visualization and save
@@ -34,7 +44,7 @@ def save_generated_images(images, save_dir):
     print(f"Generated images saved in '{save_dir}' under separate folders for each outcome variable.")
 
 
-def generate_samples_from_noise(vae, device, batch_size=6, latent_dim=(4, 128, 256), save_dir="./preprocessing/generated_samples"):
+def generate_samples_from_noise(vae, device, batch_size=6, latent_dim=(4, 128, 256), save_dir="./experiments/vae_model_performance/sd_vae_images/generated_samples"):
     # Sample random latent vectors
     latent_shape = (batch_size, *latent_dim)
     random_latents = torch.randn(latent_shape).to(device)
@@ -45,7 +55,7 @@ def generate_samples_from_noise(vae, device, batch_size=6, latent_dim=(4, 128, 2
         
     save_generated_images(generated_images, save_dir)
 
-def reconstruct_samples_via_vae(vae, dataloader, device, save_dir="./preprocessing/reconstructed_samples"):
+def reconstruct_samples_via_vae(vae, dataloader, device, save_dir="./experiments/vae_model_performance/sd_vae_images/reconstructed_samples"):
     # Obtain a batch from the dataloader
     real_images = next(iter(dataloader)).to(device)
     
@@ -53,12 +63,13 @@ def reconstruct_samples_via_vae(vae, dataloader, device, save_dir="./preprocessi
     with torch.no_grad():
         posterior = vae.encode(real_images)
         latents = posterior.latent_dist.sample()
+        print(latents.shape)
         reconstructed_images = vae.decode(latents).sample
     
     save_generated_images(reconstructed_images, save_dir)
     print(f"Reconstructed images saved in '{save_dir}'")
 
-def save_images_from_dataset(dataloader, save_dir="./preprocessing/dataset_samples"):
+def save_images_from_dataset(dataloader, save_dir="./experiments/dataset_samples"):
     # Save real images from the dataset
     real_images = next(iter(dataloader)).cpu().numpy()
     os.makedirs(save_dir, exist_ok=True)
@@ -83,18 +94,11 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "mps")
     
     # Load the trained VAE
-    vae = load_trained_vae(device)
-    
-    # Load your custom dataset
-    root = "./data/climate-monthly/netcdf"
-    components = ["PM25", "BC"]
-    years = [2000]
-    transformations = transforms.Resize((128, 256))
-    dataset = ClimateDataset(root, components, years, transformations=transformations)
-    dataloader = DataLoader(dataset, batch_size=6, shuffle=False)
+    vae = load_trained_vae(device, "sd_vae")
+    dataloader = ClimateDataset.initialize_data_loader(components = ["PM25", "BC"], years = [2000], batch_size=6, shuffle=False, img_size=(128, 256))
     
     # Generate samples from random noise
-    generate_samples_from_noise(vae,batch_size=6,latent_dim=(4, 64, 128), device=device)
+    #generate_samples_from_noise(vae,batch_size=6,latent_dim=(4, 64, 128), device=device)
     
     # Reconstruct samples via VAE
     reconstruct_samples_via_vae(vae, dataloader, device)

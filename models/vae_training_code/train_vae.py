@@ -5,9 +5,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
-from data_loader import ClimateDataset
+from dataloader.ClimateDataset import initialize_data_loader
 
-def initialize_vae(device, num_channels):
+def simple_vae(device, num_channels):
     # Initialize the VAE model from scratch
     vae = AutoencoderKL(
         in_channels=num_channels,  # not RGB images
@@ -17,7 +17,20 @@ def initialize_vae(device, num_channels):
         block_out_channels=(64, 128),  # Customize as needed
         latent_channels=4  # Latent space size, adjust as needed
     )
-    device = torch.device("cuda" if torch.cuda.is_available() else "mps")
+    vae = vae.to(device)  # Move to GPU if available
+    return vae
+
+def stable_diffusion_vae(device, num_channels):
+    # Load the trained VAE model
+    pretrained_model_name = "CompVis/stable-diffusion-v1-4"
+    config = AutoencoderKL.load_config(pretrained_model_name, subfolder="vae")
+
+    #fix in and out channels to match our data
+    config["in_channels"] = num_channels
+    config["out_channels"] = num_channels
+
+    # Initialize a new, untrained AutoencoderKL model with the loaded configuration
+    vae = AutoencoderKL.from_config(config)
     vae = vae.to(device)  # Move to GPU if available
     return vae
 
@@ -28,14 +41,6 @@ def print_vae_info():
         if param.requires_grad:
             print(f"{name}: Mean={param.data.mean().item()}, Std={param.data.std().item()}")
     print(f"config: {vae.config}")
-
-def initialize_data_loader(components, years, batch_size, img_size=(128, 256)):
-    # Load your custom dataset
-    root = "./data/climate-monthly/netcdf"
-    transformations = transforms.Resize(img_size)
-    dataset = ClimateDataset(root, components, years, transformations=transformations)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    return dataloader
 
 def train_vae(vae, data_loader, num_epochs=30, lr=1e-4, kl_weight=0.1):
     vae_optimizer = torch.optim.AdamW(vae.parameters(), lr=lr)
@@ -67,22 +72,18 @@ def train_vae(vae, data_loader, num_epochs=30, lr=1e-4, kl_weight=0.1):
         average_loss = epoch_loss / len(data_loader)
         print(f"VAE Epoch {epoch+1}, Average Loss: {average_loss:.4f}")
 
-    vae.save_pretrained("./models/custom_vae")
+    vae.save_pretrained("./models/stable_diffusion_vae")
     print("VAE model saved.")
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "mps")
-
-    #prepare the data loader
-    components = ["PM25", "BC"]
-    #list years between 2000 and 2017, (many outcomes don't have 2018 data)
-    years = list(range(2000, 2018))
     
     #try different values of img_size and find the best one
-    #experiments with 256,512 batch size was 6. Want to train faster
-    dataloader = initialize_data_loader(components, years, batch_size=30, img_size=(128, 256))
+    #256,512 image size on "simple" vae allowed batch size of 6. But we want to train and experiment faster
+    components = ["PM25", "BC"]
+    dataloader = initialize_data_loader(components = components, years = list(range(2000, 2018)), batch_size=12, shuffle=True, img_size=(128, 256))
 
-    vae = initialize_vae(device, num_channels=len(components))
+    vae = stable_diffusion_vae(device, num_channels=len(components))
     print("VAE model initialized.")
   
     train_vae(vae,dataloader, num_epochs=170, lr=1e-5, kl_weight=0.01)

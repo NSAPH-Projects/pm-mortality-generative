@@ -50,6 +50,14 @@ class ClimateDataset(Dataset):
         tensor = torch.nan_to_num(tensor, nan=0.0, posinf=1.0, neginf=-1.0)
 
         return tensor
+    
+    def initialize_data_loader(components, years, batch_size, shuffle, img_size):
+            # Load your custom dataset
+            root = "./data/climate-monthly/netcdf"
+            transformations = transforms.Resize(img_size)
+            dataset = ClimateDataset(root, components, years, transformations=transformations)
+            dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+            return dataloader
 
 if __name__ == "__main__":
     root = "./data/climate-monthly/netcdf"

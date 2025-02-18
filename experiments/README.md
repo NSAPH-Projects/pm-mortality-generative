@@ -1,9 +1,10 @@
-# Experiment Map
+# Experiments
 
-For multi experiment projects, it's important to keep track of what each of the
-experiments was, when they took place, etc. This readme should explain all this.
+## vae _model_performance
+create_images_vae.py is used to assess the performance of the trained VAEs. It recreates images from the dataset, and creates images by sampling from the latent space and simply decoding it.
 
-There should be one folder per experiment, and they should be named according to
-a standard scheme. If there is an experiment called "urntask" then the corresponding
-folder should be called `exp_urntask` (it should contain three subfolders, which
-should always be called `data`, `source` and `other`).
+## dataset_samples
+First a few images from the data set. They are useful for comparing to the recreated images from the VAE.
+
+## dataset_samples_doubled_and_clipped
+Some images in the dataset had a few very bright points. Was not sure if the dataset had wrong data. These images have less difference in brightness.
