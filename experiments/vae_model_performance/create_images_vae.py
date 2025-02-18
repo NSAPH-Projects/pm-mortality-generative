@@ -10,12 +10,13 @@ import sys
 import os
 
 # Add the dataloader directory to the Python path
-sys.path.append("/n/dominici_lab/lab/projects/pm-mortality-generative/ahmet/pm-mortality-generative/dataloader")
-
+sys.path.append(os.path.join(os.getcwd(), "dataloader"))
+#sys.path.append("/n/dominici_lab/lab/projects/pm-mortality-generative/ahmet/pm-mortality-generative/dataloader")
+#sys.path.append("/Users/oahmet/Projects/pm-mortality-generative/dataloader")
 # Print the Python path to verify
 print("Python path:", sys.path)
 
-from dataloader import ClimateDataset
+from climate_data_handling import initialize_data_loader
 
 def load_trained_vae(device, model_name):
     # Load the trained VAE model
@@ -95,7 +96,7 @@ if __name__ == "__main__":
     
     # Load the trained VAE
     vae = load_trained_vae(device, "sd_vae")
-    dataloader = ClimateDataset.initialize_data_loader(components = ["PM25", "BC"], years = [2000], batch_size=6, shuffle=False, img_size=(128, 256))
+    dataloader = initialize_data_loader(components = ["PM25", "BC"], years = [2000], batch_size=6, shuffle=False, img_size=(128, 256))
     
     # Generate samples from random noise
     #generate_samples_from_noise(vae,batch_size=6,latent_dim=(4, 64, 128), device=device)

@@ -6,3 +6,4 @@ notebooks/*
 preprocessing/__pycache__/
 models/sd_vae/*
 .DS_Store
+dataloader/__pycache__

@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
-from dataloader.ClimateDataset import initialize_data_loader
+from dataloader.climate_data_handling import initialize_data_loader
 
 def simple_vae(device, num_channels):
     # Initialize the VAE model from scratch
