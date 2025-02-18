@@ -89,15 +89,15 @@ if __name__ == "__main__":
     root = "./data/climate-monthly/netcdf"
     components = ["PM25", "BC"]
     years = [2000]
-    transformations = transforms.Resize((256, 512))
+    transformations = transforms.Resize((128, 256))
     dataset = ClimateDataset(root, components, years, transformations=transformations)
     dataloader = DataLoader(dataset, batch_size=6, shuffle=False)
     
     # Generate samples from random noise
-    generate_samples_from_noise(vae,batch_size=6, device=device)
+    generate_samples_from_noise(vae,batch_size=6,latent_dim=(4, 64, 128), device=device)
     
     # Reconstruct samples via VAE
     reconstruct_samples_via_vae(vae, dataloader, device)
     
-    # Save real images from dataset
-    save_images_from_dataset(dataloader)
+    # Save real images from dataset -- dont need to do it every time
+    #save_images_from_dataset(dataloader)
