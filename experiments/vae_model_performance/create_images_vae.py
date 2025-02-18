@@ -64,7 +64,7 @@ def reconstruct_samples_via_vae(vae, dataloader, device, save_dir="./experiments
     with torch.no_grad():
         posterior = vae.encode(real_images)
         latents = posterior.latent_dist.sample()
-        print(latents.shape)
+        print("latent dimension shape : ",latents.shape)
         reconstructed_images = vae.decode(latents).sample
     
     save_generated_images(reconstructed_images, save_dir)
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     dataloader = initialize_data_loader(components = ["PM25", "BC"], years = [2000], batch_size=6, shuffle=False, img_size=(128, 256))
     
     # Generate samples from random noise
-    #generate_samples_from_noise(vae,batch_size=6,latent_dim=(4, 64, 128), device=device)
+    generate_samples_from_noise(vae,batch_size=6,latent_dim=(4, 16, 32), device=device)
     
     # Reconstruct samples via VAE
     reconstruct_samples_via_vae(vae, dataloader, device)
