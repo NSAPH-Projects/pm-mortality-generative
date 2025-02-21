@@ -16,4 +16,4 @@ conda deactivate
 source activate try2
 
 # Run program
-python preprocessing/train_vae.py
+python models/vae_training_code/train_vae.py

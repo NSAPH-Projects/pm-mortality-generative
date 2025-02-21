@@ -57,9 +57,9 @@ def find_stats_gpu(root, components):
     root = "./data/climate-monthly/netcdf"
     device = torch.device("cuda" if torch.cuda.is_available() else "mps")
     # to check if the normalization is correct
-    normy = transforms.Normalize(mean=[4.889685, 0.3213127], std=[4.6892176, 0.323582213])
+    #normy = transforms.Normalize(mean=[4.889685, 0.3213127], std=[4.6892176, 0.323582213])
     
-    dataset = ClimateDataset(root=root, components=components, years=list(range(2000, 2018)), transformations=normy)
+    dataset = ClimateDataset(root=root, components=components, years=list(range(2000, 2018)), transformations=None)
     dataloader = DataLoader(dataset, batch_size=5, shuffle=False)
 
     stats = {component: {
@@ -94,7 +94,8 @@ def find_stats_gpu(root, components):
             if b_max > stats[component]['max']:
                 stats[component]['max'] = b_max
 
-            # Mean and Variance (Welford's method)
+            # Mean and Variance (Welford's method) - https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
+            # allows for calculation of variance in a single pass and using gpu
             new_count = valid_data.numel()
             new_mean = valid_data.mean().item()
             new_m2 = ((valid_data - new_mean) ** 2).sum().item()

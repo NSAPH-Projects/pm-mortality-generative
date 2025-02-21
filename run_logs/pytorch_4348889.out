@@ -1,0 +1,9 @@
+VAE model initialized.
+VAE Epoch 1, Average Loss: 85.6476
+VAE Epoch 2, Average Loss: 21.1050
+VAE Epoch 3, Average Loss: 9.2286
+VAE Epoch 4, Average Loss: 5.9366
+VAE Epoch 5, Average Loss: 4.7234
+VAE Epoch 6, Average Loss: 3.3848
+VAE Epoch 7, Average Loss: 3.4127
+VAE Epoch 8, Average Loss: 2.6709
