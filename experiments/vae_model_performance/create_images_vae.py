@@ -96,7 +96,7 @@ if __name__ == "__main__":
     
     # Load the trained VAE
     vae = load_trained_vae(device, "sd_vae")
-    dataloader = initialize_data_loader(components = ["PM25", "BC"], years = [2000], batch_size=6, shuffle=False, img_size=(128, 256))
+    dataloader = initialize_data_loader(components = ["PM25", "BC"], batch_size=6, shuffle=False, img_size=(128, 256))
     
     # Generate samples from random noise
     generate_samples_from_noise(vae,batch_size=6,latent_dim=(4, 16, 32), device=device)
