@@ -35,12 +35,29 @@ class ClimateDataset(Dataset):
             arr.append(tensor_values)
         
         tensor = torch.stack(arr, dim=0)
+        mask = ~torch.isnan(tensor)
+        # it is imporant to convert nan values to 0 before applying the normalization
+        # otherwise zero padding would have greater value than some data points
+        # also the downscaling is smoother this way. bc otherwise nanvalues propogate
+        tensor = torch.where(mask, tensor, torch.zeros_like(tensor))
+        
         if self.transformations:
             tensor = self.transformations(tensor)
+        
+        resize = get_resize(self.transformations)
+        if resize:
+            mask = resize(mask)
+            mask = (mask > 0.5).float()
 
-        mask = ~torch.isnan(tensor)
-        tensor = torch.where(mask, tensor, torch.zeros_like(tensor))
         return tensor, mask
+    
+def get_resize(transformation):
+    """Returns the transforms.Resize transformation if present, otherwise None."""
+    if isinstance(transformation, transforms.Compose):
+        for t in transformation.transforms:
+            if isinstance(t, transforms.Resize):
+                return t
+    return None
 
 def prepare_file_path(root, month, component):
         file_path = f"{root}/{component}/GWRwSPEC"
@@ -121,6 +138,26 @@ def find_stats_gpu(root, components):
 
 #Component: PM25, Min: 0.0, Max: 485.6000061035156, Mean: 4.8896847201718225, Std: 4.68921759434198                                                                 
 #Component: BC, Min: 0.0, Max: 17.700000762939453, Mean: 0.321312690636626, Std: 0.32358221282327493
+
+def denormalize(tensor, mean=[4.889685, 0.3213127], std=[4.6892176, 0.323582213]):
+    """
+    Denormalizes a tensor by reversing the normalization process.
+
+    Args:
+        tensor (torch.Tensor): Normalized tensor of shape (C, H, W).
+        mean (list or torch.Tensor): Mean values for each channel.
+        std (list or torch.Tensor): Standard deviation values for each channel.
+
+    Returns:
+        torch.Tensor: Denormalized tensor.
+    """
+    mean = torch.tensor(mean).view(-1, 1, 1)  # Reshape to (C, 1, 1) for broadcasting
+    std = torch.tensor(std).view(-1, 1, 1)    # Reshape to (C, 1, 1) for broadcasting
+    device = torch.device("cuda" if torch.cuda.is_available() else "mps")
+    mean = mean.to(device)
+    std = std.to(device)
+    
+    return tensor * std + mean
 
 def initialize_data_loader(components, batch_size, shuffle, img_size):
         # Load your custom dataset

@@ -7,3 +7,6 @@ preprocessing/__pycache__/
 models/sd_vae/*
 .DS_Store
 dataloader/__pycache__
+experiments/*
+!experiments/vae_model_performance/create_images_vae.py
+models/*
