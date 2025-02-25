@@ -5,7 +5,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
-from dataloader.climate_data_handling import initialize_data_loader
+
+import sys, os
+sys.path.append(os.path.join(os.getcwd(), "dataloader"))
+from climate_data_handling import initialize_data_loader
 
 def simple_vae(device, num_channels):
     # Initialize the VAE model from scratch
@@ -42,14 +45,14 @@ def print_vae_info():
             print(f"{name}: Mean={param.data.mean().item()}, Std={param.data.std().item()}")
     print(f"config: {vae.config}")
 
-def train_vae(vae, data_loader, num_epochs=30, lr=1e-4, kl_weight=0.1):
+def train_vae(vae, vae_name, data_loader, num_epochs=30, lr=1e-4, kl_weight=0.1):
     vae_optimizer = torch.optim.AdamW(vae.parameters(), lr=lr)
     
     for epoch in tqdm(range(num_epochs), desc='Epochs'):
         vae.train()
         
         epoch_loss = 0  # To accumulate loss over each epoch
-        for batch in tqdm(data_loader, desc='Batches', leave=False):  # tqdm will show progress for batches within each epoch
+        for batch, mask in tqdm(data_loader, desc='Batches', leave=False):  # tqdm will show progress for batches within each epoch
             batch = batch.to(device)
             vae_optimizer.zero_grad()
             
@@ -60,7 +63,9 @@ def train_vae(vae, data_loader, num_epochs=30, lr=1e-4, kl_weight=0.1):
             reconstructed = vae.decode(latents).sample
             
             # Compute VAE loss
-            recon_loss = F.mse_loss(reconstructed, batch)
+            #print the number of nan values and total number of values in the batch
+            #print("Number of nan values in batch: ", mask.sum() , " Total number of values in batch: ", batch.numel())
+            recon_loss = F.mse_loss(reconstructed[mask], batch[mask])
             kl_loss = posterior.latent_dist.kl().mean()
             vae_loss = recon_loss + kl_weight * kl_loss
 
@@ -72,7 +77,10 @@ def train_vae(vae, data_loader, num_epochs=30, lr=1e-4, kl_weight=0.1):
         average_loss = epoch_loss / len(data_loader)
         print(f"VAE Epoch {epoch+1}, Average Loss: {average_loss:.4f}")
 
-    vae.save_pretrained("./models/stable_diffusion_vae")
+    save_path = f"./models/{vae_name}"
+    os.makedirs(save_path, exist_ok=True)  # Create directory if it doesn't exist
+    vae.save_pretrained(f"./models/{vae_name}")
+
     print("VAE model saved.")
 
 if __name__ == "__main__":
@@ -81,10 +89,10 @@ if __name__ == "__main__":
     #try different values of img_size and find the best one
     #256,512 image size on "simple" vae allowed batch size of 6. But we want to train and experiment faster
     components = ["PM25", "BC"]
-    dataloader = initialize_data_loader(components = components, years = list(range(2000, 2018)), batch_size=12, shuffle=True, img_size=(128, 256))
+    dataloader = initialize_data_loader(components = components, batch_size=12, shuffle=True, img_size=(128, 256))
 
     vae = stable_diffusion_vae(device, num_channels=len(components))
     print("VAE model initialized.")
   
-    train_vae(vae,dataloader, num_epochs=170, lr=1e-5, kl_weight=0.01)
+    train_vae(vae, "sd_vae", dataloader, num_epochs=100, lr=1e-5, kl_weight=0.01)
     print("Training complete.")

@@ -1,3 +1,0 @@
-Epochs:   0%|          | 0/30 [00:00<?, ?it/s]
-Batches:   0%|          | 0/36 [00:00<?, ?it/s][A
-Batches:   3%|▎         | 1/36 [00:13<07:36, 13.05s/it][Aslurmstepd: error: *** JOB 3904330 ON holygpu7c26105 CANCELLED AT 2025-02-15T18:57:13 ***
