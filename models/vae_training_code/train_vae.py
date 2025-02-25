@@ -89,10 +89,10 @@ if __name__ == "__main__":
     #try different values of img_size and find the best one
     #256,512 image size on "simple" vae allowed batch size of 6. But we want to train and experiment faster
     components = ["PM25", "BC"]
-    dataloader = initialize_data_loader(components = components, batch_size=30, shuffle=True, img_size=(128, 256))
+    dataloader = initialize_data_loader(components = components, batch_size=12, shuffle=True, img_size=(128, 256))
 
-    vae = simple_vae(device, num_channels=len(components))
+    vae = stable_diffusion_vae(device, num_channels=len(components))
     print("VAE model initialized.")
   
-    train_vae(vae, "simple_vae", dataloader, num_epochs=150, lr=1e-4, kl_weight=0.1)
+    train_vae(vae, "sd_vae", dataloader, num_epochs=100, lr=1e-5, kl_weight=0.01)
     print("Training complete.")

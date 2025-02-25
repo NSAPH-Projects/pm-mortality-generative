@@ -47,7 +47,7 @@ class ClimateDataset(Dataset):
         resize = get_resize(self.transformations)
         if resize:
             mask = resize(mask)
-            mask = (mask > 0.5).float()
+            mask = (mask > 0.5)
 
         return tensor, mask
     
@@ -144,19 +144,18 @@ def denormalize(tensor, mean=[4.889685, 0.3213127], std=[4.6892176, 0.323582213]
     Denormalizes a tensor by reversing the normalization process.
 
     Args:
-        tensor (torch.Tensor): Normalized tensor of shape (C, H, W).
+        tensor (torch.Tensor): Normalized tensor of shape (B, C, H, W).
         mean (list or torch.Tensor): Mean values for each channel.
         std (list or torch.Tensor): Standard deviation values for each channel.
 
     Returns:
         torch.Tensor: Denormalized tensor.
     """
-    mean = torch.tensor(mean).view(-1, 1, 1)  # Reshape to (C, 1, 1) for broadcasting
-    std = torch.tensor(std).view(-1, 1, 1)    # Reshape to (C, 1, 1) for broadcasting
-    device = torch.device("cuda" if torch.cuda.is_available() else "mps")
-    mean = mean.to(device)
-    std = std.to(device)
-    
+    device = tensor.device  # Use the same device as the input tensor
+
+    mean = torch.as_tensor(mean, dtype=tensor.dtype, device=device).view(1, -1, 1, 1)  # (1, C, 1, 1)
+    std = torch.as_tensor(std, dtype=tensor.dtype, device=device).view(1, -1, 1, 1)    # (1, C, 1, 1)
+
     return tensor * std + mean
 
 def initialize_data_loader(components, batch_size, shuffle, img_size):
@@ -187,4 +186,3 @@ if __name__ == "__main__":
     years = [2013, 2014, 2015, 2016]
 
     find_stats_gpu(root, components)
-

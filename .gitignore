@@ -10,3 +10,4 @@ dataloader/__pycache__
 experiments/*
 !experiments/vae_model_performance/create_images_vae.py
 models/*
+run_logs/*
