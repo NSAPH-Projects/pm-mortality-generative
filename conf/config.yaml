@@ -1,0 +1,16 @@
+dataloader_components: 
+  - no3
+  - pm25
+  - so4
+  - ss
+  - nh4
+  - dust
+  - bc
+  - om
+grid_size: [128, 256]  # grid size
+
+root_dir : /n/netscratch/dominici_lab/Lab/pm25_components__washu__grid_0_1__dataloader/monthly/
+
+hydra:
+  run:
+    dir: logs/${now:%Y-%m-%d}/${now:%H-%M-%S}

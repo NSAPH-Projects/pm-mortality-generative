@@ -3,12 +3,15 @@ import torch
 from tqdm import tqdm
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 import torchvision.transforms as transforms
+import hydra
+from omegaconf import DictConfig
+
 
 import sys, os
 sys.path.append(os.path.join(os.getcwd(), "dataloader"))
-from climate_data_handling import initialize_data_loader
+from washu_dataloader import initialize_dataset
 
 def simple_vae(device, num_channels):
     # Initialize the VAE model from scratch
@@ -28,13 +31,11 @@ def stable_diffusion_vae(device, num_channels):
     pretrained_model_name = "CompVis/stable-diffusion-v1-4"
     config = AutoencoderKL.load_config(pretrained_model_name, subfolder="vae")
 
-    #fix in and out channels to match our data
     config["in_channels"] = num_channels
     config["out_channels"] = num_channels
 
-    # Initialize a new, untrained AutoencoderKL model with the loaded configuration
     vae = AutoencoderKL.from_config(config)
-    vae = vae.to(device)  # Move to GPU if available
+    vae = vae.to(device)
     return vae
 
 def print_vae_info():
@@ -47,17 +48,24 @@ def print_vae_info():
 
 def train_vae(vae, vae_name, data_loader, num_epochs=30, lr=1e-4, kl_weight=0.1):
     vae_optimizer = torch.optim.AdamW(vae.parameters(), lr=lr)
+    device = torch.device("cuda" if torch.cuda.is_available() else "mps")
     
     for epoch in tqdm(range(num_epochs), desc='Epochs'):
         vae.train()
         
         epoch_loss = 0  # To accumulate loss over each epoch
-        for batch, mask in tqdm(data_loader, desc='Batches', leave=False):  # tqdm will show progress for batches within each epoch
-            batch = batch.to(device)
+        for batch in tqdm(data_loader, desc='Batches', leave=False):  # tqdm will show progress for batches within each epoch
+            
+            mask = ~torch.isnan(batch)
+
+            # I think we should pad with the minimum element of the current batch instead of zero. Because what was zero previously is a negative number after normalization
+            batch_padded = torch.nan_to_num(batch, nan=0.0)
+            
+            batch_padded = batch_padded.to(device)
             vae_optimizer.zero_grad()
             
             # VAE forward pass
-            posterior = vae.encode(batch)
+            posterior = vae.encode(batch_padded)
             latents = posterior.latent_dist.sample()
             #print("latent shape: ", latents.shape)
             reconstructed = vae.decode(latents).sample
@@ -83,16 +91,34 @@ def train_vae(vae, vae_name, data_loader, num_epochs=30, lr=1e-4, kl_weight=0.1)
 
     print("VAE model saved.")
 
+@hydra.main(config_path="../../conf", config_name="config", version_base=None)
+def get_vae(cfg: DictConfig, vae_name="sd_vae"):
+    device = torch.device("cuda" if torch.cuda.is_available() else "mps")
+    if(vae_name == "sd_vae"):
+        vae = stable_diffusion_vae(device, num_channels=len(cfg.dataloader_components))
+    elif(vae_name == "simple_vae"):
+        vae = simple_vae(device, num_channels=len(cfg.dataloader_components))
+    else: 
+        print("Invalid vae name. Please use 'sd_vae' or 'simple_vae'")
+        return
+    print("VAE model initialized.")
+    return vae
+
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "mps")
-    
-    #try different values of img_size and find the best one
-    #256,512 image size on "simple" vae allowed batch size of 6. But we want to train and experiment faster
-    components = ["PM25", "BC"]
-    dataloader = initialize_data_loader(components = components, batch_size=12, shuffle=True, img_size=(128, 256))
 
-    vae = stable_diffusion_vae(device, num_channels=len(components))
-    print("VAE model initialized.")
-  
-    train_vae(vae, "sd_vae", dataloader, num_epochs=100, lr=1e-5, kl_weight=0.01)
+    dataset = initialize_dataset()      
+    loader = DataLoader(
+        dataset,
+        batch_size=2,   #256,512 image size on "simple" vae allowed batch size of 6. But we want to train and experiment faster
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True,
+        persistent_workers=True,
+    )
+    
+    vae_name = "sd_vae"
+    vae = get_vae(vae_name)
+
+    train_vae(vae, vae_name, loader, num_epochs=150, lr=1e-5, kl_weight=0.01)
     print("Training complete.")
