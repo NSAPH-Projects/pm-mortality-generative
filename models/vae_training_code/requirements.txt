@@ -6,3 +6,5 @@ accelerate
 datasets
 xarray
 h5netcdf
+hydra-core
+wandb

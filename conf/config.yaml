@@ -1,4 +1,4 @@
-dataloader_components: 
+components: 
   - no3
   - pm25
   - so4
@@ -7,9 +7,23 @@ dataloader_components:
   - dust
   - bc
   - om
+
 grid_size: [128, 256]  # grid size
 
-root_dir : /n/netscratch/dominici_lab/Lab/pm25_components__washu__grid_0_1__dataloader/monthly/
+batch_size: 6
+num_epochs: 200
+learning_rate: 1e-5
+kl_weight: 0.1
+
+root_dir : /Users/oahmet/Projects/pm-mortality-generative/data/monthly #/n/netscratch/dominici_lab/Lab/pm25_components__washu__grid_0_1__dataloader/monthly/
+
+wandb:
+  do_wandb: true
+  project: "diffuseX"        # Project name in wandb
+  dir: "tmp/wandb/"
+  entity: "diffuseX"                 # Team or user entity (set null if unused)
+  run_id: null                 # Run ID for resuming a run, auto-generated if null
+  auto_id_prefix: true         # Whether to auto-generate a run ID prefix based on the checkpoint prefix
 
 hydra:
   run:

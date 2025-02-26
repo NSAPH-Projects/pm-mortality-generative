@@ -10,3 +10,5 @@ dataloader/__pycache__
 experiments/**/*.png
 models/*
 run_logs/*
+wandb/*
+logs/*

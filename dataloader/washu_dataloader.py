@@ -47,41 +47,38 @@ class ComponentsWashuDataset(Dataset):
 
         return tensor
 
-@hydra.main(config_path="../conf", config_name="config", version_base=None)
-def initialize_dataset(cfg: DictConfig):
+def initialize_dataset(root_dir, grid_size, components):
 
-    with open(f"{cfg.root_dir}/summary.json", "r") as f:
-        summary = json.load(f)
+    mean, std = get_mean_and_std(root_dir)
 
-    means = [summary["means"][component] for component in cfg.dataloader_components]
-    stds = [summary["stds"][component] for component in cfg.dataloader_components]
+    means = [mean[component] for component in components]
+    stds = [std[component] for component in components]
 
-    transform = transforms.Resize(cfg.grid_size)
+    transform = transforms.Resize(grid_size)
     transform = transforms.Compose(
         [
-            transforms.Resize(cfg.grid_size),
+            transforms.Resize(grid_size),
             transforms.Normalize(mean=means, std=stds),
         ]
     )
 
     dataset = ComponentsWashuDataset(
-        root_dir=cfg.root_dir,
+        root_dir=root_dir,
         transform=transform,
-        components=cfg.dataloader_components,
+        components=components,
     )
 
     return dataset
  
-@hydra.main(config_path="../conf", config_name="config", version_base=None)
-def get_mean_and_std(cfg: DictConfig):
-    with open(f"{cfg.root_dir}/summary.json", "r") as f:
+def get_mean_and_std(root_dir):
+    with open(f"{root_dir}/summary.json", "r") as f:
         summary = json.load(f)
     return summary["means"], summary["stds"]
 
-def denormalize(tensor):
+def denormalize(tensor, root_dir):
     device = tensor.device  # Use the same device as the input tensor
 
-    mean, std = get_mean_and_std()
+    mean, std = get_mean_and_std(root_dir)
     mean = torch.as_tensor(mean, dtype=tensor.dtype, device=device).view(1, -1, 1, 1)  # (1, C, 1, 1)
     std = torch.as_tensor(std, dtype=tensor.dtype, device=device).view(1, -1, 1, 1)    # (1, C, 1, 1)
 
