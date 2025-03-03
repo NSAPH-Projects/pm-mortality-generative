@@ -9,11 +9,16 @@ import hydra
 from omegaconf import DictConfig
 import wandb
 import omegaconf
+import numpy as np
 
 
 import sys, os
-sys.path.append(os.path.join(os.getcwd(), "dataloader"))
-from washu_dataloader import initialize_dataset
+#sys.path.append(os.path.join(os.getcwd(), "dataloader"))
+
+import dataloader.washu_dataloader as wu_dl
+
+import dataloader.climate_data_handling as ch
+from modules.vae.create_images_vae import save_generated_images
 
 def simple_vae(device, num_channels):
     # Initialize the VAE model from scratch
@@ -40,7 +45,7 @@ def stable_diffusion_vae(device, num_channels):
     vae = vae.to(device)
     return vae
 
-def print_vae_info():
+def print_vae_info(vae):
     myparam = vae.named_parameters();
     print("Initial Model Weights:")
     for name, param in vae.named_parameters():
@@ -48,7 +53,7 @@ def print_vae_info():
             print(f"{name}: Mean={param.data.mean().item()}, Std={param.data.std().item()}")
     print(f"config: {vae.config}")
 
-def train_vae(cfg :DictConfig , vae, vae_name, data_loader):
+def train_vae(cfg :DictConfig , vae, vae_name, data_loader, dataset):
     
     run = wandb.init(entity=cfg.wandb.entity, project=cfg.wandb.project, 
                 config=omegaconf.OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True
@@ -60,6 +65,9 @@ def train_vae(cfg :DictConfig , vae, vae_name, data_loader):
     for epoch in tqdm(range(cfg.num_epochs), desc='Epochs'):
         vae.train()
         
+        #save the input and reconstructed images to wandb at the beginning of each epoch
+        first_batch = True
+
         epoch_loss = 0  # To accumulate loss over each epoch
         for batch in tqdm(data_loader, desc='Batches', leave=False):  # tqdm will show progress for batches within each epoch
             
@@ -76,7 +84,22 @@ def train_vae(cfg :DictConfig , vae, vae_name, data_loader):
             latents = posterior.latent_dist.sample()
             #print("latent shape: ", latents.shape)
             reconstructed = vae.decode(latents).sample
-            
+
+            if(first_batch):
+                #save the input and reconstructed images to wandb
+                input_images = batch_padded[0].detach()
+
+                input_images = dataset.denormalize(input_images).cpu().numpy()
+                input_images = np.hstack(input_images/input_images.max())
+
+                reconstructed_images = reconstructed[0].detach()
+                reconstructed_images = dataset.denormalize(reconstructed_images).cpu().numpy()
+                
+                reconstructed_images = np.hstack(reconstructed_images/reconstructed_images.max())
+
+                wandb.log({"input_images": [wandb.Image(input_images)], "reconstructed_images": [wandb.Image(reconstructed_images)]})
+                first_batch = False
+        
             # Compute VAE loss
             #print the number of nan values and total number of values in the batch
             #print("Number of nan values in batch: ", mask.sum() , " Total number of values in batch: ", batch.numel())
@@ -110,11 +133,11 @@ def get_vae(vae_name, device, num_components):
     print("VAE model initialized.")
     return vae
 
-@hydra.main(config_path="/Users/oahmet/Projects/pm-mortality-generative/conf", config_name="config", version_base=None)
+@hydra.main(config_path="./conf", config_name="config", version_base=None)
 def main(cfg: DictConfig):
     device = torch.device("cuda" if torch.cuda.is_available() else "mps")
 
-    dataset = initialize_dataset(cfg.root_dir, cfg.grid_size, cfg.components)      
+    dataset = wu_dl.initialize_dataset(cfg.root_dir, cfg.grid_size, cfg.components)      
     loader = DataLoader(
         dataset,
         batch_size=cfg.batch_size,   #256,512 image size on "simple" vae allowed batch size of 6. But we want to train and experiment faster
@@ -123,11 +146,12 @@ def main(cfg: DictConfig):
         pin_memory=True,
         persistent_workers=True,
     )
-    
+    #loader = ch.initialize_data_loader(components = ["PM25", "BC"], batch_size=cfg.batch_size, shuffle=True, img_size=cfg.grid_size)
+
     vae_name = "sd_vae"
     vae = get_vae(vae_name, device, len(cfg.components))
 
-    train_vae(cfg, vae, vae_name, loader)
+    train_vae(cfg, vae, vae_name, loader, dataset)
     print("Training complete.")
 
 if __name__ == "__main__":

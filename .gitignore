@@ -12,3 +12,4 @@ models/*
 run_logs/*
 wandb/*
 logs/*
+playground.py

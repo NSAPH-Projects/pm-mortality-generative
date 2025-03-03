@@ -25,6 +25,9 @@ def load_trained_vae(device, model_name):
     vae.eval()  # Set to evaluation mode
     return vae
 
+def numpy_to_pil(images, mask, save_dir):
+    return NotImplementedError
+
 def save_generated_images(images, mask, save_dir):
     mask = mask.cpu().numpy()  # Convert mask to NumPy
     os.makedirs(save_dir, exist_ok=True)

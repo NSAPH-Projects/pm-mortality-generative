@@ -8,3 +8,4 @@ xarray
 h5netcdf
 hydra-core
 wandb
+wandb[media]

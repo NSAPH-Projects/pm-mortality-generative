@@ -26,6 +26,9 @@ class ComponentsWashuDataset(Dataset):
         self.yyyymm = [
             f"{year}{month:02d}" for year, month in product(years, range(1, 13))
         ]
+        mean_dict, std_dict = get_mean_and_std(root_dir)
+        self.means = [mean_dict[component] for component in components]
+        self.stds = [std_dict[component] for component in components]
 
     def __len__(self):
         return len(self.yyyymm)
@@ -46,14 +49,26 @@ class ComponentsWashuDataset(Dataset):
             tensor = self.transform(tensor)
 
         return tensor
+    
+    def denormalize(self, tensor):
+        device = tensor.device  # Use the same device as the input tensor
+        
+        mean = torch.as_tensor(self.means, dtype=tensor.dtype, device=device).view(-1, 1, 1)  # (1, C, 1, 1)
+        std = torch.as_tensor(self.stds, dtype=tensor.dtype, device=device).view(-1, 1, 1)    # (1, C, 1, 1)
+        
+        #if we want to denormalize a batch of images
+        if(tensor.dim() == 4):
+            mean = mean.unsqueeze(0)
+            std = std.unsqueeze(0)
+
+        return tensor * std + mean
 
 def initialize_dataset(root_dir, grid_size, components):
 
-    mean, std = get_mean_and_std(root_dir)
-
-    means = [mean[component] for component in components]
-    stds = [std[component] for component in components]
-
+    mean_dict, std_dict = get_mean_and_std(root_dir)
+    means = [mean_dict[component] for component in components]
+    stds = [std_dict[component] for component in components]
+    
     transform = transforms.Resize(grid_size)
     transform = transforms.Compose(
         [
@@ -74,15 +89,6 @@ def get_mean_and_std(root_dir):
     with open(f"{root_dir}/summary.json", "r") as f:
         summary = json.load(f)
     return summary["means"], summary["stds"]
-
-def denormalize(tensor, root_dir):
-    device = tensor.device  # Use the same device as the input tensor
-
-    mean, std = get_mean_and_std(root_dir)
-    mean = torch.as_tensor(mean, dtype=tensor.dtype, device=device).view(1, -1, 1, 1)  # (1, C, 1, 1)
-    std = torch.as_tensor(std, dtype=tensor.dtype, device=device).view(1, -1, 1, 1)    # (1, C, 1, 1)
-
-    return tensor * std + mean
 
 if __name__ == "__main__":
     initialize_dataset()

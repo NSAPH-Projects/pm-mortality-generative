@@ -153,8 +153,12 @@ def denormalize(tensor, mean=[4.889685, 0.3213127], std=[4.6892176, 0.323582213]
     """
     device = tensor.device  # Use the same device as the input tensor
 
-    mean = torch.as_tensor(mean, dtype=tensor.dtype, device=device).view(1, -1, 1, 1)  # (1, C, 1, 1)
-    std = torch.as_tensor(std, dtype=tensor.dtype, device=device).view(1, -1, 1, 1)    # (1, C, 1, 1)
+    mean = torch.as_tensor(mean, dtype=tensor.dtype, device=device).view(-1, 1, 1)  # (1, C, 1, 1)
+    std = torch.as_tensor(std, dtype=tensor.dtype, device=device).view(-1, 1, 1)    # (1, C, 1, 1)
+
+    if(tensor.dim() == 4):
+        mean = mean.unsqueeze(0)
+        std = std.unsqueeze(0)
 
     return tensor * std + mean
 
