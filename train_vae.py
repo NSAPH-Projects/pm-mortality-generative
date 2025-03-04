@@ -10,7 +10,7 @@ from omegaconf import DictConfig
 import wandb
 import omegaconf
 import numpy as np
-
+from modules.vae.create_images_vae import image_as_grid
 
 import sys, os
 #sys.path.append(os.path.join(os.getcwd(), "dataloader"))
@@ -69,6 +69,9 @@ def train_vae(cfg :DictConfig , vae, vae_name, data_loader, dataset):
         first_batch = True
 
         epoch_loss = 0  # To accumulate loss over each epoch
+        epoch_kl_loss = 0
+        epoch_recon_loss = 0
+
         for batch in tqdm(data_loader, desc='Batches', leave=False):  # tqdm will show progress for batches within each epoch
             
             batch = batch.to(device)
@@ -87,17 +90,9 @@ def train_vae(cfg :DictConfig , vae, vae_name, data_loader, dataset):
 
             if(first_batch):
                 #save the input and reconstructed images to wandb
-                input_images = batch_padded[0].detach()
-
-                input_images = dataset.denormalize(input_images).cpu().numpy()
-                input_images = np.hstack(input_images/input_images.max())
-
-                reconstructed_images = reconstructed[0].detach()
-                reconstructed_images = dataset.denormalize(reconstructed_images).cpu().numpy()
-                
-                reconstructed_images = np.hstack(reconstructed_images/reconstructed_images.max())
-
-                wandb.log({"input_images": [wandb.Image(input_images)], "reconstructed_images": [wandb.Image(reconstructed_images)]})
+                input_image = image_as_grid(batch_padded[0], dataset) #dataset is passed to be able to denormalize
+                reconstructed_image = image_as_grid(reconstructed[0], dataset)
+                wandb.log({"input_images": [wandb.Image(input_image)], "reconstructed_images": [wandb.Image(reconstructed_image)]})
                 first_batch = False
         
             # Compute VAE loss
@@ -111,9 +106,17 @@ def train_vae(cfg :DictConfig , vae, vae_name, data_loader, dataset):
             vae_optimizer.step()
             
             epoch_loss += vae_loss.item()
+            epoch_kl_loss += kl_loss.item()
+            epoch_recon_loss += recon_loss.item()
         
         average_loss = epoch_loss / len(data_loader)
+        average_kl_loss = epoch_kl_loss / len(data_loader)
+        average_recon_loss = epoch_recon_loss / len(data_loader)
+
         wandb.log({"loss": average_loss})
+        wandb.log({"kl_loss": average_kl_loss})
+        wandb.log({"recon_loss": average_recon_loss})
+
         #print(f"VAE Epoch {epoch+1}, Average Loss: {average_loss:.4f}")
 
     save_path = f"./models/{vae_name}"

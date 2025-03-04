@@ -13,3 +13,4 @@ run_logs/*
 wandb/*
 logs/*
 playground.py
+__pycache__/

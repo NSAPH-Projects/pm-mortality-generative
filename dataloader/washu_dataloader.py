@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import torchvision.transforms as transforms
 import xarray as xr
+from torchvision.transforms.functional import InterpolationMode
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
@@ -47,6 +48,8 @@ class ComponentsWashuDataset(Dataset):
 
         if self.transform:
             tensor = self.transform(tensor)
+        
+        #tensor = torch.nan_to_num(tensor, nan=0.0)
 
         return tensor
     
@@ -72,8 +75,9 @@ def initialize_dataset(root_dir, grid_size, components):
     transform = transforms.Resize(grid_size)
     transform = transforms.Compose(
         [
-            transforms.Resize(grid_size),
+            transforms.Resize(grid_size, interpolation=InterpolationMode.NEAREST),
             transforms.Normalize(mean=means, std=stds),
+            transforms.RandomVerticalFlip(1) 
         ]
     )
 

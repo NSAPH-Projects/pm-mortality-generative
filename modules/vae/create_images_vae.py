@@ -9,14 +9,13 @@ import torchvision.transforms as transforms
 import sys
 import os
 
+import hydra
+from omegaconf import DictConfig
+
 # Add the dataloader directory to the Python path
 sys.path.append(os.path.join(os.getcwd(), "dataloader"))
-#sys.path.append("/n/dominici_lab/lab/projects/pm-mortality-generative/ahmet/pm-mortality-generative/dataloader")
-#sys.path.append("/Users/oahmet/Projects/pm-mortality-generative/dataloader")
-# Print the Python path to verify
-#print("Python path:", sys.path)
+import washu_dataloader as wu_dl
 
-from climate_data_handling import initialize_data_loader, denormalize
 
 def load_trained_vae(device, model_name):
     # Load the trained VAE model
@@ -25,8 +24,26 @@ def load_trained_vae(device, model_name):
     vae.eval()  # Set to evaluation mode
     return vae
 
-def numpy_to_pil(images, mask, save_dir):
-    return NotImplementedError
+# Scale each channel to [0, 1]. Avoid division by zero if all values are the same
+def scale_each_channel(tensor):
+        
+    min_vals = tensor.amin(dim=(1, 2), keepdim=True)  # Use amin for multi-dim min
+    max_vals = tensor.amax(dim=(1, 2), keepdim=True)  # Use amax for multi-dim max
+
+    return torch.where(
+        max_vals == min_vals, 
+        torch.ones_like(tensor),  
+        (tensor - min_vals) / (max_vals - min_vals))
+
+#takes a tensor and return an image of the components concatenated horizontally
+def image_as_grid(tensor, dataset):
+    tensor = dataset.denormalize(tensor.detach())
+    tensor = scale_each_channel(tensor)
+    np_array = tensor.cpu().numpy()
+    stacked_images = np.hstack(np_array)
+    stacked_images = (stacked_images * 255).astype(np.uint8)
+    img_pil = Image.fromarray(stacked_images, mode="L")
+    return img_pil
 
 def save_generated_images(images, mask, save_dir):
     mask = mask.cpu().numpy()  # Convert mask to NumPy
@@ -117,22 +134,42 @@ def save_images_from_dataset(dataloader, save_dir="./experiments/dataset_samples
 
     print(f"Real images saved in '{save_dir}' under separate folders for each outcome variable.")
 
+@hydra.main(config_path="../../conf", config_name="config", version_base=None)
+def main(cfg: DictConfig):
+    device = torch.device("cuda" if torch.cuda.is_available() else "mps")
+
+    dataset = wu_dl.initialize_dataset(cfg.root_dir, cfg.grid_size, cfg.components)      
+    loader = DataLoader(
+        dataset,
+        batch_size=cfg.batch_size,   #256,512 image size on "simple" vae allowed batch size of 6. But we want to train and experiment faster
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
+        persistent_workers=True,
+    )
+    first_batch = next(iter(loader))
+    padded = torch.nan_to_num(first_batch[0], nan=0.0)
+    image = image_as_grid(padded, dataset)
+    image.show()
+
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "mps")
-    
+    main()
     # Load the trained VAE
-    model_name = "sd_vae"
-    vae = load_trained_vae(device, model_name)
-    dataloader = initialize_data_loader(components = ["PM25", "BC"], batch_size=6, shuffle=False, img_size=(128, 256))
+    #model_name = "sd_vae"
+    #vae = load_trained_vae(device, model_name)
+    #dataloader = initialize_data_loader(components = ["PM25", "BC"], batch_size=6, shuffle=False, img_size=(128, 256))
 
-    _, mask = next(iter(dataloader))
+    #_, mask = next(iter(dataloader))
 
     # Reconstruct samples via VAE
-    latent_shape = reconstruct_samples_via_vae(vae,device, dataloader, model_name=model_name)
-    print("Latent shape: ", latent_shape)
+    #latent_shape = reconstruct_samples_via_vae(vae,device, dataloader, model_name=model_name)
+    #print("Latent shape: ", latent_shape)
 
     # Generate samples from random noise
-    generate_samples_from_noise(vae, device=device,mask=mask, batch_size=6,latent_dim=latent_shape[1:], model_name=model_name)
+    #generate_samples_from_noise(vae, device=device,mask=mask, batch_size=6,latent_dim=latent_shape[1:], model_name=model_name)
     
     # Save real images from dataset -- dont need to do it every time
     #save_images_from_dataset(dataloader)
+
+    
