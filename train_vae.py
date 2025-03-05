@@ -53,6 +53,27 @@ def print_vae_info(vae):
             print(f"{name}: Mean={param.data.mean().item()}, Std={param.data.std().item()}")
     print(f"config: {vae.config}")
 
+def fill_nan_with_min(batch):
+    B, C, _, _ = batch.shape
+
+    nan_mask = torch.isnan(batch)
+
+    # Replace NaNs with a large positive value temporarily
+    batch_without_nan = batch.clone()
+    batch_without_nan[nan_mask] = float('inf')
+
+    # Compute the minimum per image, ignoring the temporarily replaced values
+    min_vals = batch_without_nan.view(B, C, -1).min(dim=2, keepdim=True)[0].view(B, C, 1, 1)
+
+    # Replace NaNs with the corresponding min value
+    batch[nan_mask] = min_vals.expand_as(batch)[nan_mask]
+
+    return batch
+
+def fill_nan_with_mean_div_std(batch, means, stds):
+     #not implemented yet
+    return batch
+
 def train_vae(cfg :DictConfig , vae, vae_name, data_loader, dataset):
     
     run = wandb.init(entity=cfg.wandb.entity, project=cfg.wandb.project, 
@@ -77,8 +98,7 @@ def train_vae(cfg :DictConfig , vae, vae_name, data_loader, dataset):
             batch = batch.to(device)
             mask = ~torch.isnan(batch)
 
-            # I think we should pad with the minimum element of the current batch instead of zero. Because what was zero previously is a negative number after normalization
-            batch_padded = torch.nan_to_num(batch, nan=0.0)
+            batch_padded = fill_nan_with_min(batch) #this is same as first filling nan with zero and then normalizing. But we first normalize
             
             vae_optimizer.zero_grad()
             
@@ -92,7 +112,10 @@ def train_vae(cfg :DictConfig , vae, vae_name, data_loader, dataset):
                 #save the input and reconstructed images to wandb
                 input_image = image_as_grid(batch_padded[0], dataset) #dataset is passed to be able to denormalize
                 reconstructed_image = image_as_grid(reconstructed[0], dataset)
-                wandb.log({"input_images": [wandb.Image(input_image)], "reconstructed_images": [wandb.Image(reconstructed_image)]})
+                masked_rc_image = image_as_grid(reconstructed[0], dataset, mask[0])
+                wandb.log({"input_images": [wandb.Image(input_image)],
+                           "masked_reconstructed_images": [wandb.Image(masked_rc_image)],
+                            "reconstructed_images": [wandb.Image(reconstructed_image)] })
                 first_batch = False
         
             # Compute VAE loss
@@ -151,10 +174,12 @@ def main(cfg: DictConfig):
     )
     #loader = ch.initialize_data_loader(components = ["PM25", "BC"], batch_size=cfg.batch_size, shuffle=True, img_size=cfg.grid_size)
 
-    vae_name = "sd_vae"
-    vae = get_vae(vae_name, device, len(cfg.components))
+    if(cfg.load_pretrained):
+        vae = AutoencoderKL.from_pretrained(f"./models/{cfg.vae_name}", use_safetensors = True).to(device)
+    else:
+        vae = get_vae(cfg.vae_name, device, len(cfg.components))
 
-    train_vae(cfg, vae, vae_name, loader, dataset)
+    train_vae(cfg, vae, cfg.vae_name, loader, dataset)
     print("Training complete.")
 
 if __name__ == "__main__":

@@ -10,12 +10,14 @@ components:
 
 grid_size: [128, 256]  # grid size
 
-batch_size: 6
-num_epochs: 200
-learning_rate: 1e-5
+batch_size: 12
+num_epochs: 600
+learning_rate: 2e-6
 kl_weight: 0.1
+load_pretrained: True
+vae_name: "sd_vae" # or "simple_vae"
 
-root_dir : /n/netscratch/dominici_lab/Lab/pm25_components__washu__grid_0_1__dataloader/monthly #/Users/oahmet/Projects/pm-mortality-generative/data/monthly  
+root_dir : ./data/monthly # /n/netscratch/dominici_lab/Lab/pm25_components__washu__grid_0_1__dataloader/monthly #/Users/oahmet/Projects/pm-mortality-generative/data/monthly  
 
 wandb:
   do_wandb: true

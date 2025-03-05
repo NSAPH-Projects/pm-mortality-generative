@@ -36,9 +36,10 @@ def scale_each_channel(tensor):
         (tensor - min_vals) / (max_vals - min_vals))
 
 #takes a tensor and return an image of the components concatenated horizontally
-def image_as_grid(tensor, dataset):
+def image_as_grid(tensor, dataset, mask=None):
     tensor = dataset.denormalize(tensor.detach())
     tensor = scale_each_channel(tensor)
+    if(mask is not None): tensor = tensor * mask
     np_array = tensor.cpu().numpy()
     stacked_images = np.hstack(np_array)
     stacked_images = (stacked_images * 255).astype(np.uint8)
@@ -150,6 +151,7 @@ def main(cfg: DictConfig):
     first_batch = next(iter(loader))
     padded = torch.nan_to_num(first_batch[0], nan=0.0)
     image = image_as_grid(padded, dataset)
+    #print("Image shape: ", image.size)
     image.show()
 
 if __name__ == "__main__":

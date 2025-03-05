@@ -14,3 +14,4 @@ wandb/*
 logs/*
 playground.py
 __pycache__/
+medsea_bottomT_raster.tif

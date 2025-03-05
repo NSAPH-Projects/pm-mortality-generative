@@ -1,6 +1,8 @@
 import json
 from itertools import product
 import time
+from pathlib import Path
+
 
 import hydra
 import numpy as np
@@ -77,7 +79,6 @@ def initialize_dataset(root_dir, grid_size, components):
         [
             transforms.Resize(grid_size, interpolation=InterpolationMode.NEAREST),
             transforms.Normalize(mean=means, std=stds),
-            transforms.RandomVerticalFlip(1) 
         ]
     )
 
@@ -94,6 +95,64 @@ def get_mean_and_std(root_dir):
         summary = json.load(f)
     return summary["means"], summary["stds"]
 
+@hydra.main(config_path="../conf", config_name="config", version_base=None)
+def main(cfg: DictConfig):
+    """This script tests the dataloader and saves aggregate statistics in a summary file."""
+
+    transform = transforms.Resize(cfg.grid_size)
+
+    dataset = ComponentsWashuDataset(
+        root_dir=cfg.root_dir,
+        transform=transform,
+        components=cfg.components,
+    )
+
+    loader = DataLoader(
+        dataset,
+        batch_size=8,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True,
+        persistent_workers=True,
+    )
+
+    # compute the means and standard deviations without storing all the data
+    # do not sum nans
+    totals_sum = torch.zeros(len(cfg.components))
+    totals_ss = torch.zeros(len(cfg.components))
+    totals_n = torch.zeros(len(cfg.components))
+
+    # also keep track of time
+    start_time = time.time()
+
+    input_size = None
+    for batch in tqdm(loader):
+        if input_size is None:
+            input_size = batch.shape[2:]
+        totals_n += (~torch.isnan(batch)).sum(dim=(0, 2, 3))
+        x = torch.nan_to_num(batch, nan=0.0)
+        totals_sum += x.sum(dim=(0, 2, 3))
+        totals_ss += (x**2).sum(dim=(0, 2, 3))
+
+    elapsed_time = time.time() - start_time
+
+    # compute means and stds
+    means = totals_sum / totals_n
+    stds = torch.sqrt(totals_ss / totals_n - means**2)
+
+    # conver to dict with components as keys
+    means_dict = {component: float(mean) for component, mean in zip(cfg.components, means)}
+    stds_dict = {component: float(std) for component, std in zip(cfg.components, stds)}
+
+    # save to file
+    summary = {"means": means_dict, "stds": stds_dict, "elapsed_time": elapsed_time, "input_grid_size": input_size}
+
+    summary_file = f"{cfg.root_dir}/summary.json"
+    Path(summary_file).touch(exist_ok=True)
+
+    with open(summary_file, "w") as f:
+        json.dump(summary, f, indent=2)
+
 if __name__ == "__main__":
-    initialize_dataset()
+    main()
     #denormalize()
