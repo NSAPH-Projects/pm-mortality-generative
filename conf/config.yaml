@@ -1,21 +1,23 @@
 components: 
-  - no3
+  #- no3
   - pm25
-  - so4
-  - ss
-  - nh4
-  - dust
-  - bc
-  - om
+  #- so4
+  #- ss
+  #- nh4
+  #- dust
+  #- bc
+  #- om
 
 grid_size: [128, 256]  # grid size
 
 batch_size: 12
-num_epochs: 600
-learning_rate: 2e-6
-kl_weight: 0.1
-load_pretrained: True
+num_epochs: 400
+learning_rate: 4e-5
+kl_weight: 0.01
+load_pretrained: False
 vae_name: "sd_vae" # or "simple_vae"
+run_id : 1
+run_name: "wild_turtle" # specify if loading a pretrained model
 
 root_dir : ./data/monthly # /n/netscratch/dominici_lab/Lab/pm25_components__washu__grid_0_1__dataloader/monthly #/Users/oahmet/Projects/pm-mortality-generative/data/monthly  
 

@@ -16,4 +16,4 @@ conda deactivate
 source activate try2
 
 # Run program
-python train_vae.py
+python train_vae.py run_id=$SLURM_JOB_ID

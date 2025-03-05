@@ -11,6 +11,8 @@ import wandb
 import omegaconf
 import numpy as np
 from modules.vae.create_images_vae import image_as_grid
+from datetime import datetime
+
 
 import sys, os
 #sys.path.append(os.path.join(os.getcwd(), "dataloader"))
@@ -76,7 +78,12 @@ def fill_nan_with_mean_div_std(batch, means, stds):
 
 def train_vae(cfg :DictConfig , vae, vae_name, data_loader, dataset):
     
-    run = wandb.init(entity=cfg.wandb.entity, project=cfg.wandb.project, 
+    today_date = datetime.today().strftime('%Y-%m-%d')
+
+    # Initialize Weights & Biases with a unique run name
+    run_name = f"run_{today_date}_{cfg.run_id}"
+
+    run = wandb.init(entity=cfg.wandb.entity, project=cfg.wandb.project, name=run_name,
                 config=omegaconf.OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True
     ))
 
@@ -142,9 +149,9 @@ def train_vae(cfg :DictConfig , vae, vae_name, data_loader, dataset):
 
         #print(f"VAE Epoch {epoch+1}, Average Loss: {average_loss:.4f}")
 
-    save_path = f"./models/{vae_name}"
+    save_path = f"./models/{vae_name}/{run_name}"
     os.makedirs(save_path, exist_ok=True)  # Create directory if it doesn't exist
-    vae.save_pretrained(f"./models/{vae_name}")
+    vae.save_pretrained(save_path)
 
     print("VAE model saved.")
 
@@ -175,7 +182,7 @@ def main(cfg: DictConfig):
     #loader = ch.initialize_data_loader(components = ["PM25", "BC"], batch_size=cfg.batch_size, shuffle=True, img_size=cfg.grid_size)
 
     if(cfg.load_pretrained):
-        vae = AutoencoderKL.from_pretrained(f"./models/{cfg.vae_name}", use_safetensors = True).to(device)
+        vae = AutoencoderKL.from_pretrained(f"./models/{cfg.vae_name}/{cfg.run_name}", use_safetensors = True).to(device)
     else:
         vae = get_vae(cfg.vae_name, device, len(cfg.components))
 
