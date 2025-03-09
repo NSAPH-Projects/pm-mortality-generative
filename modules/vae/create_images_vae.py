@@ -35,7 +35,7 @@ def scale_each_channel(tensor):
         torch.ones_like(tensor),  
         (tensor - min_vals) / (max_vals - min_vals))
 
-#takes a tensor and return an image of the components concatenated horizontally
+#takes a tensor and return a numpy array of the image of the components concatenated horizontally
 def image_as_grid(tensor, dataset, mask=None):
     tensor = dataset.denormalize(tensor.detach())
     tensor = scale_each_channel(tensor)

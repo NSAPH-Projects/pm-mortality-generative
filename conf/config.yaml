@@ -1,3 +1,7 @@
+defaults:
+  - _self_
+  - ae: vqgan
+  
 components: 
   #- no3
   - pm25
@@ -18,6 +22,7 @@ load_pretrained: False
 vae_name: "sd_vae" # or "simple_vae"
 run_id : 1
 run_name: "wild_turtle" # specify if loading a pretrained model
+seed: null
 
 root_dir : ./data/monthly # /n/netscratch/dominici_lab/Lab/pm25_components__washu__grid_0_1__dataloader/monthly #/Users/oahmet/Projects/pm-mortality-generative/data/monthly  
 
