@@ -123,8 +123,8 @@ def log_validation(model, args, dataset, accelerator, global_step):
     
     sample = dataset.__getitem__(0).unsqueeze(0).to(accelerator.device, dtype=dtype)
     mask = ~torch.isnan(sample)
-    original_image_bt = fill_nan_with_min(sample) #this is same as first filling nan with zero and then normalizing. But we first normalize
-    generated_image_bt = accelerator.unwrap_model(model)(original_image).sample
+    original_image_bt = fill_nan_with_min(sample, dataset.min_vals, ~mask) #this is same as first filling nan with zero and then normalizing. But we first normalize
+    generated_image_bt = accelerator.unwrap_model(model)(original_image_bt).sample
     model.train()
     
     original_image = image_as_grid(original_image_bt[0], dataset)

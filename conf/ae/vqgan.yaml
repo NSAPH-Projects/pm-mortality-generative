@@ -16,14 +16,14 @@ train_data_dir: null  # A folder containing the training data. Folder contents m
 image_column: "image"  # The column of the dataset containing an image.
 max_train_samples: null  # For debugging purposes or quicker training, truncate the number of training examples to this value if set.
 validation_images: null  # A set of validation images evaluated every `--validation_steps` and logged to `--report_to`.
-output_dir: "./experiments/vqgan-output"  # The output directory where the model predictions and checkpoints will be written.
+output_dir: "./modules/vqgan/vqgan-output"  # The output directory where the model predictions and checkpoints will be written.
 cache_dir: null  # The directory where the downloaded models and datasets will be stored.
 seed: null  # A seed for reproducible training.
 resolution: 512  # The resolution for input images, all the images in the train/validation dataset will be resized to this resolution.
 center_crop: false  # Whether to center crop the input images to the resolution. If not set, the images will be randomly cropped. The images will be resized to the resolution first before cropping.
 random_flip: false  # whether to randomly flip images horizontally
-train_batch_size: 2  # Batch size (per device) for the training dataloader. was 16
-num_train_epochs: 100
+train_batch_size: 6  # Batch size (per device) for the training dataloader. was 16
+num_train_epochs: 200
 max_train_steps: null  # Total number of training steps to perform.  If provided, overrides num_train_epochs.
 gradient_accumulation_steps: 1  # Number of updates steps to accumulate before performing a backward/update pass.
 gradient_checkpointing: false  # Whether or not to use gradient checkpointing to save memory at the expense of slower backward pass.

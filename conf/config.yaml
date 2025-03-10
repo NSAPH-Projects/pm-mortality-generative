@@ -3,18 +3,18 @@ defaults:
   - ae: vqgan
   
 components: 
-  #- no3
+  - no3
   - pm25
-  #- so4
-  #- ss
-  #- nh4
-  #- dust
-  #- bc
-  #- om
+  - so4
+  - ss
+  - nh4
+  - dust
+  - bc
+  - om
 
 grid_size: [128, 256]  # grid size
 
-batch_size: 12
+batch_size: 4
 num_epochs: 400
 learning_rate: 4e-5
 kl_weight: 0.01
