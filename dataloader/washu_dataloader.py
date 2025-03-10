@@ -30,8 +30,9 @@ class ComponentsWashuDataset(Dataset):
             f"{year}{month:02d}" for year, month in product(years, range(1, 13))
         ]
         mean_dict, std_dict = get_mean_and_std(root_dir)
-        self.means = [mean_dict[component] for component in components]
-        self.stds = [std_dict[component] for component in components]
+        self.means = np.array([mean_dict[component] for component in components])
+        self.stds = np.array([std_dict[component] for component in components])
+        self.min_vals = - self.means / self.stds
 
     def __len__(self):
         return len(self.yyyymm)

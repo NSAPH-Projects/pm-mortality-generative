@@ -150,22 +150,11 @@ def log_grad_norm(model, accelerator, global_step):
             grad_norm = (grads.norm(p=2) / grads.numel()).item()
             accelerator.log({"grad_norm/" + name: grad_norm}, step=global_step)
 
-def fill_nan_with_min(batch):
-    B, C, _, _ = batch.shape
-
-    nan_mask = torch.isnan(batch)
-
-    # Replace NaNs with a large positive value temporarily
-    batch_without_nan = batch.clone()
-    batch_without_nan[nan_mask] = float('inf')
-
-    # Compute the minimum per image, ignoring the temporarily replaced values
-    min_vals = batch_without_nan.view(B, C, -1).min(dim=2, keepdim=True)[0].view(B, C, 1, 1)
-
-    # Replace NaNs with the corresponding min value
-    batch[nan_mask] = min_vals.expand_as(batch)[nan_mask]
-
-    return batch
+def fill_nan_with_min(batch, min_vals, nan_mask):
+    min_vals = torch.FloatTensor(min_vals).to(batch.device)
+    min_vals = min_vals.view(1, -1, 1, 1)  # Reshape to match (B, C, H, W) broadcasting
+    filled_batch = torch.where(nan_mask, min_vals, batch)
+    return filled_batch
 
 @hydra.main(config_path="../../conf", config_name="config", version_base=None)
 def main(cfg: DictConfig):
@@ -205,7 +194,7 @@ def main(cfg: DictConfig):
     # If passed along, set the training seed now.
     if cfg.seed is not None:
         set_seed(cfg.seed) 
-        
+
     # Handle the repository creation
     if accelerator.is_main_process:
         if args.output_dir is not None:
@@ -255,7 +244,7 @@ def main(cfg: DictConfig):
     if args.use_ema:
         ema_model = EMAModel(model.parameters(), model_cls=VQModel, model_config=model.config)
     if args.discriminator_config_name_or_path is None:
-        discriminator = Discriminator()
+        discriminator = Discriminator(in_channels=len(cfg.components))
     else:
         config = Discriminator.load_config(args.discriminator_config_name_or_path)
         discriminator = Discriminator.from_config(config)
@@ -504,7 +493,7 @@ def main(cfg: DictConfig):
         for i, batch in enumerate(train_dataloader):
             batch = batch.to(accelerator.device, non_blocking=True)
             mask = ~torch.isnan(batch)
-            pixel_values = fill_nan_with_min(batch)
+            pixel_values = fill_nan_with_min(batch, train_dataset.min_vals, ~mask)
 
             data_time_m.update(time.time() - end)
             generator_step = ((i // args.gradient_accumulation_steps) % 2) == 0
@@ -519,6 +508,8 @@ def main(cfg: DictConfig):
             # encode images to the latent space and get the commit loss from vq tokenization
             # Return commit loss
             fmap, commit_loss = model(pixel_values, return_dict=False)
+            # Make the values corresponding to nan in the input min. we will only use mask to calculate l2,l1 loss after here. for discr. it is not necessary
+            fmap = fill_nan_with_min(fmap, train_dataset.min_vals, ~mask)
 
             if generator_step:
                 with accelerator.accumulate(model):
@@ -529,7 +520,11 @@ def main(cfg: DictConfig):
                         loss = F.l1_loss(pixel_values[mask], fmap[mask])
                     
                     # generator loss
-                    gen_loss = -discriminator(fmap[mask]).mean()
+                    #logger.info(f"fmap shape: {fmap.shape}")
+                    #logger.info(f"fmap[mask] shape: {fmap[mask].shape}")
+                    #logger.info(f"mask shape: {mask.shape}")
+                    
+                    gen_loss = -discriminator(fmap).mean()
                     last_dec_layer = accelerator.unwrap_model(model).decoder.conv_out.weight
                     norm_grad_wrt_rec_loss = grad_layer_wrt_loss(loss, last_dec_layer).norm(p=2)
                     norm_grad_wrt_gen_loss = grad_layer_wrt_loss(gen_loss, last_dec_layer).norm(p=2)
@@ -559,10 +554,10 @@ def main(cfg: DictConfig):
                 with accelerator.accumulate(discriminator):
                     fmap.detach_()
                     pixel_values.requires_grad_()
-                    real = discriminator(pixel_values[mask])
-                    fake = discriminator(fmap[mask])
+                    real = discriminator(pixel_values)
+                    fake = discriminator(fmap)
                     loss = (F.relu(1 + fake) + F.relu(1 - real)).mean()
-                    gp = gradient_penalty(pixel_values[mask], real)
+                    gp = gradient_penalty(pixel_values, real)
                     loss += gp
                     avg_discr_loss = accelerator.gather(loss.repeat(args.train_batch_size)).mean()
                     accelerator.backward(loss)
