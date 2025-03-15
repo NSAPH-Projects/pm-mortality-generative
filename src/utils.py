@@ -16,7 +16,7 @@ from omegaconf import DictConfig
 
 # Add the dataloader directory to the Python path
 sys.path.append(os.path.join(os.getcwd(), "src/dataloader"))
-import washu_dataloader as wu_dl
+import washu_dataloader as wu_dl # i dont think we need this anymore
 
 
 def load_trained_vae(device, model_name):
