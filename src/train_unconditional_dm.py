@@ -69,10 +69,6 @@ check_min_version("0.33.0.dev0")
 
 logger = get_logger(__name__, log_level="INFO")
 
-DATASET_NAME_MAPPING = {
-    "lambdalabs/naruto-blip-captions": ("image", "text"),
-}
-
 
 def save_model_card(
     args,
@@ -587,7 +583,7 @@ def main(cfg: DictConfig):
                 mask = ~torch.isnan(batch)
                 pixel_values = fill_nan_with_min(batch, train_dataset.min_vals, ~mask)
 
-                latents = vae.encode(pixel_values.to(weight_dtype)).latent_dist.sample()
+                latents = vae.encode(pixel_values.to(weight_dtype)).latents
                 latents = latents * vae.config.scaling_factor
 
                 # Sample noise that we'll add to the latents
