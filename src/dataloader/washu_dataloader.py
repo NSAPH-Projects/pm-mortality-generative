@@ -33,6 +33,7 @@ class ComponentsWashuDataset(Dataset):
         self.means = np.array([mean_dict[component] for component in components])
         self.stds = np.array([std_dict[component] for component in components])
         self.min_vals = - self.means / self.stds
+        self.mask = ~self.__getitem__(0).isnan() # assuming that the mask is the same for all datapoints. Used in image generation only
 
     def __len__(self):
         return len(self.yyyymm)

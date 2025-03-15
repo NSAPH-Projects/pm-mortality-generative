@@ -10,7 +10,7 @@ from omegaconf import DictConfig
 import wandb
 import omegaconf
 import numpy as np
-from modules.vae.create_images_vae import image_as_grid
+from training.create_images_vae import image_as_grid
 from datetime import datetime
 
 
@@ -20,7 +20,7 @@ import sys, os
 import dataloader.washu_dataloader as wu_dl
 
 import dataloader.climate_data_handling as ch
-from modules.vae.create_images_vae import save_generated_images
+from training.create_images_vae import save_generated_images
 
 def simple_vae(device, num_channels):
     # Initialize the VAE model from scratch

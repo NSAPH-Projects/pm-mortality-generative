@@ -1,10 +1,12 @@
 from diffusers import AutoencoderKL
 import torch
+import PIL
 from PIL import Image
 import numpy as np
 import os
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
+from typing import Union, List
 
 import sys
 import os
@@ -13,7 +15,7 @@ import hydra
 from omegaconf import DictConfig
 
 # Add the dataloader directory to the Python path
-sys.path.append(os.path.join(os.getcwd(), "dataloader"))
+sys.path.append(os.path.join(os.getcwd(), "src/dataloader"))
 import washu_dataloader as wu_dl
 
 
@@ -24,11 +26,29 @@ def load_trained_vae(device, model_name):
     vae.eval()  # Set to evaluation mode
     return vae
 
-# Scale each channel to [0, 1]. Avoid division by zero if all values are the same
-def scale_each_channel(tensor):
-        
-    min_vals = tensor.amin(dim=(1, 2), keepdim=True)  # Use amin for multi-dim min
-    max_vals = tensor.amax(dim=(1, 2), keepdim=True)  # Use amax for multi-dim max
+def fill_nan_with_min(batch, min_vals, nan_mask):
+    min_vals = torch.FloatTensor(min_vals).to(batch.device)
+    min_vals = min_vals.view(1, -1, 1, 1)  # Reshape to match (B, C, H, W) broadcasting
+    filled_batch = torch.where(nan_mask, min_vals, batch)
+    return filled_batch
+
+def denormalize(tensor, means, stds):
+    device = tensor.device  # Use the same device as the input tensor
+    
+    mean = torch.as_tensor(means, dtype=tensor.dtype, device=device).view(-1, 1, 1)  # (1, C, 1, 1)
+    std = torch.as_tensor(stds, dtype=tensor.dtype, device=device).view(-1, 1, 1)    # (1, C, 1, 1)
+    
+    #if we want to denormalize a batch of images
+    if(tensor.dim() == 4):
+        mean = mean.unsqueeze(0)
+        std = std.unsqueeze(0)
+
+    return tensor * std + mean
+
+# Scale each channel to [0, 1]. Avoid division by zero if all values are the same. Works for batched and unbatched tensors.
+def scale_channels_to_one(tensor):
+    min_vals = tensor.amin(dim=(-2, -1), keepdim=True)  # Use amin for multi-dim min
+    max_vals = tensor.amax(dim=(-2, -1), keepdim=True)  # Use amax for multi-dim max
 
     return torch.where(
         max_vals == min_vals, 
@@ -36,15 +56,30 @@ def scale_each_channel(tensor):
         (tensor - min_vals) / (max_vals - min_vals))
 
 #takes a tensor and return a numpy array of the image of the components concatenated horizontally
-def image_as_grid(tensor, dataset, mask=None):
-    tensor = dataset.denormalize(tensor.detach())
-    tensor = scale_each_channel(tensor)
+def channels_seperated_image(tensor, means, stds, output="pil", mask=None)-> Union[List[PIL.Image.Image], np.ndarray]:
+    b, c, h, w = tensor.shape
+    tensor = denormalize(tensor.detach(), means, stds)
+    tensor = scale_channels_to_one(tensor)
     if(mask is not None): tensor = tensor * mask
     np_array = tensor.cpu().numpy()
-    stacked_images = np.hstack(np_array)
-    stacked_images = (stacked_images * 255).astype(np.uint8)
-    img_pil = Image.fromarray(stacked_images, mode="L")
-    return img_pil
+    images_in_row = np_array.np_array.transpose(0, 2, 1, 3).reshape(b, h, c * w)
+    images_in_row = (images_in_row * 255).astype(np.uint8)
+    if output == "pil":
+        img_list = [Image.fromarray(img, mode="L") for img in images_in_row]
+        return img_list
+    return images_in_row
+
+#this function is to create a pil image that can help us compare the ground truth and the generated images
+def stacked_image(generated, groundtruth, means, stds, output='pil', mask=None):
+    #check if the batch size of the generated and groundtruth images are 1
+    assert generated.shape[0] == 1 and groundtruth.shape[0] == 1, "Batch size must be 1"
+    
+    generated = channels_seperated_image(generated, means, stds, output="numpy" , mask=mask)[0]
+    groundtruth = channels_seperated_image(groundtruth, means, stds, output="numpy" , mask=mask)[0]
+    stacked_image = np.concatenate((generated, groundtruth), axis=-1)
+    if output == 'pil':
+        return Image.fromarray(stacked_image, mode="L")
+    return stacked_image
 
 def save_generated_images(images, mask, save_dir):
     mask = mask.cpu().numpy()  # Convert mask to NumPy

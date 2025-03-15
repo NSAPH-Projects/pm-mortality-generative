@@ -22,9 +22,7 @@ from pathlib import Path
 
 import accelerate
 import numpy as np
-import PIL
 import PIL.Image
-import timm
 import torch
 import torch.nn.functional as F
 from accelerate import Accelerator
@@ -35,8 +33,6 @@ from discriminator import Discriminator
 from huggingface_hub import create_repo
 from packaging import version
 from PIL import Image
-from timm.data import resolve_data_config
-from timm.data.transforms_factory import create_transform
 from torchvision import transforms
 from tqdm import tqdm
 
@@ -49,10 +45,10 @@ from diffusers.utils import check_min_version, is_wandb_available
 
 
 import sys
-sys.path.append(os.path.join(os.getcwd(), "dataloader"))
-sys.path.append(os.path.join(os.getcwd(), "modules/vae"))
+sys.path.append(os.path.join(os.getcwd(), "src/dataloader"))
+sys.path.append(os.path.join(os.getcwd(), "src/utils"))
 import washu_dataloader as wu_dl
-from create_images_vae import image_as_grid
+from utils import channels_seperated_image, fill_nan_with_min
 
 import hydra
 from omegaconf import DictConfig
@@ -127,9 +123,9 @@ def log_validation(model, args, dataset, accelerator, global_step):
     generated_image_bt = accelerator.unwrap_model(model)(original_image_bt).sample
     model.train()
     
-    original_image = image_as_grid(original_image_bt[0], dataset)
-    generated_image = image_as_grid(generated_image_bt[0], dataset)
-    masked_image = image_as_grid(generated_image_bt[0], dataset, mask=mask[0])
+    original_image = channels_seperated_image(original_image_bt, dataset.means, dataset.stds)[0]
+    generated_image = channels_seperated_image(generated_image_bt, dataset, dataset.means, dataset.stds)[0]
+    masked_image = channels_seperated_image(generated_image_bt, dataset,  dataset.means, dataset.stds, mask=mask[0])[0]
     # Log images
     for tracker in accelerator.trackers:
         if tracker.name == "wandb":
@@ -150,11 +146,6 @@ def log_grad_norm(model, accelerator, global_step):
             grad_norm = (grads.norm(p=2) / grads.numel()).item()
             accelerator.log({"grad_norm/" + name: grad_norm}, step=global_step)
 
-def fill_nan_with_min(batch, min_vals, nan_mask):
-    min_vals = torch.FloatTensor(min_vals).to(batch.device)
-    min_vals = min_vals.view(1, -1, 1, 1)  # Reshape to match (B, C, H, W) broadcasting
-    filled_batch = torch.where(nan_mask, min_vals, batch)
-    return filled_batch
 
 @hydra.main(config_path="../../conf", config_name="config", version_base=None)
 def main(cfg: DictConfig):
@@ -329,77 +320,7 @@ def main(cfg: DictConfig):
     
     args.train_batch_size * accelerator.num_processes
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
-    '''
-    # DataLoaders creation:
-    if args.dataset_name is not None:
-        # Downloading and loading a dataset from the hub.
-        dataset = load_dataset(
-            args.dataset_name,
-            args.dataset_config_name,
-            cache_dir=args.cache_dir,
-            data_dir=args.train_data_dir,
-        )
-    else:
-        data_files = {}
-        if args.train_data_dir is not None:
-            data_files["train"] = os.path.join(args.train_data_dir, "**")
-        dataset = load_dataset(
-            "imagefolder",
-            data_files=data_files,
-            cache_dir=args.cache_dir,
-        )
-        # See more about loading custom images at
-        # https://huggingface.co/docs/datasets/v2.4.0/en/image_load#imagefolder
 
-    # Preprocessing the datasets.
-    # We need to tokenize inputs and targets.
-    column_names = dataset["train"].column_names
-
-    # 6. Get the column names for input/target.
-    assert args.image_column is not None
-    image_column = args.image_column
-    if image_column not in column_names:
-        raise ValueError(f"--image_column' value '{args.image_column}' needs to be one of: {', '.join(column_names)}")
-    # Preprocessing the datasets.
-    train_transforms = transforms.Compose(
-        [
-            transforms.Resize(args.resolution, interpolation=transforms.InterpolationMode.BILINEAR),
-            transforms.CenterCrop(args.resolution) if args.center_crop else transforms.RandomCrop(args.resolution),
-            transforms.RandomHorizontalFlip() if args.random_flip else transforms.Lambda(lambda x: x),
-            transforms.ToTensor(),
-        ]
-    )
-    validation_transform = transforms.Compose(
-        [
-            transforms.Resize(args.resolution, interpolation=transforms.InterpolationMode.BILINEAR),
-            transforms.ToTensor(),
-        ]
-    )
-
-    def preprocess_train(examples):
-        images = [image.convert("RGB") for image in examples[image_column]]
-        examples["pixel_values"] = [train_transforms(image) for image in images]
-        return examples
-
-    with accelerator.main_process_first():
-        if args.max_train_samples is not None:
-            dataset["train"] = dataset["train"].shuffle(seed=args.seed).select(range(args.max_train_samples))
-        train_dataset = dataset["train"].with_transform(preprocess_train)
-
-    def collate_fn(examples):
-        pixel_values = torch.stack([example["pixel_values"] for example in examples])
-        pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
-        return {"pixel_values": pixel_values}
-
-    # DataLoaders creation:
-    train_dataloader = torch.utils.data.DataLoader(
-        train_dataset,
-        shuffle=True,
-        collate_fn=collate_fn,
-        batch_size=args.train_batch_size,
-        num_workers=args.dataloader_num_workers,
-    )
-    '''
 
     train_dataset = wu_dl.initialize_dataset(cfg.root_dir, cfg.grid_size, cfg.components)      
     train_dataloader = torch.utils.data.DataLoader(
