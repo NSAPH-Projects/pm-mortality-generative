@@ -103,7 +103,7 @@ class ULDMPipeline(DiffusionPipeline):
         """
 
         latents = randn_tensor(
-            (batch_size, self.unet.config.in_channels, self.unet.config.sample_size, self.unet.config.sample_size),
+            (batch_size, self.unet.config.in_channels, *self.unet.config.sample_size),
             generator=generator,
         )
         latents = latents.to(self.device)

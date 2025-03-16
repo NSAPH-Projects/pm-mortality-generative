@@ -144,6 +144,9 @@ More information on all the CLI arguments and the environment are available on y
 
 def log_validation(vae, unet, scheduler, args, data_mean, data_std, mask, accelerator, weight_dtype, epoch): #we dont have multiple precision datatypes yet anyways. form_pretrained would take it as argument
     logger.info("Running validation... ")
+    data_mean = data_mean.to(accelerator.device, dtype=weight_dtype)
+    data_std = data_std.to(accelerator.device, dtype=weight_dtype)
+    mask = mask.to(accelerator.device)
 
     pipeline = ULDMPipeline(
         vqvae=accelerator.unwrap_model(vae),
@@ -173,7 +176,7 @@ def log_validation(vae, unet, scheduler, args, data_mean, data_std, mask, accele
             autocast_ctx = torch.autocast(accelerator.device.type)
 
         with autocast_ctx:
-            image = pipeline(num_inference_steps=5, generator=generator)[0]
+            image = pipeline(num_inference_steps=40, generator=generator)[0]
 
         images.append(image)
 
@@ -309,10 +312,16 @@ def main(cfg: DictConfig):
     with ContextManagers(deepspeed_zero_init_disabled_context_manager()):
         
         vae = VQModel.from_pretrained("models/vqmodel")
+    
+    from diffusers.utils.torch_utils import randn_tensor
+
+    dummy_batch = torch.randn((1, len(cfg.components), *cfg.grid_size))
+    latent_dim = vae.encode(dummy_batch).latents.shape[1:]
+    logger.info(f"Latent dim: {latent_dim}")
 
     if args.pretrained_model_name_or_path is None:
         unet = UNet2DModel(
-            sample_size=args.resolution,#TODO: fix this
+            sample_size=(latent_dim[1], latent_dim[2]),
             in_channels=vae.config.latent_channels,
             out_channels=vae.config.latent_channels,
             layers_per_block=2,
@@ -449,6 +458,7 @@ def main(cfg: DictConfig):
     with accelerator.main_process_first():
         train_dataset = wu_dl.initialize_dataset(cfg.root_dir, cfg.grid_size, cfg.components)      
 
+
     # DataLoaders creation:
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset,
@@ -497,6 +507,12 @@ def main(cfg: DictConfig):
     elif accelerator.mixed_precision == "bf16":
         weight_dtype = torch.bfloat16
         args.mixed_precision = accelerator.mixed_precision
+
+    #data stats
+    data_mean = train_dataset.means.to(dtype=weight_dtype, device=accelerator.device)
+    data_std = train_dataset.stds.to(dtype=weight_dtype, device=accelerator.device)
+    data_min_val = train_dataset.min_vals.to(dtype=weight_dtype, device=accelerator.device)
+    data_mask = train_dataset.mask.to(device=accelerator.device)
 
     # Move text_encode and vae to gpu and cast to weight_dtype
     vae.to(accelerator.device, dtype=weight_dtype)
@@ -575,19 +591,6 @@ def main(cfg: DictConfig):
         # Only show the progress bar once on each machine.
         disable=not accelerator.is_local_main_process,
     )
-    if accelerator.is_main_process:
-        log_validation(
-                    vae,
-                    unet,
-                    noise_scheduler,
-                    args,
-                    train_dataset.means, 
-                    train_dataset.stds,
-                    train_dataset.mask.unsqueeze(0),
-                    accelerator,
-                    weight_dtype,
-                    global_step,
-                )
 
     for epoch in range(first_epoch, args.num_train_epochs):
         train_loss = 0.0
@@ -595,7 +598,7 @@ def main(cfg: DictConfig):
             with accelerator.accumulate(unet):
                 # Convert images to latent space
                 mask = ~torch.isnan(batch)
-                pixel_values = fill_nan_with_min(batch, train_dataset.min_vals, ~mask)
+                pixel_values = fill_nan_with_min(batch, data_min_val, ~mask)
 
                 latents = vae.encode(pixel_values.to(weight_dtype)).latents
                 latents = latents * vae.config.scaling_factor
@@ -739,9 +742,9 @@ def main(cfg: DictConfig):
                     unet,
                     noise_scheduler,
                     args,
-                    train_dataset.means,
-                    train_dataset.stds,
-                    train_dataset.mask.unsqueeze(0),
+                    data_mean,
+                    data_std,
+                    data_mask,
                     accelerator,
                     weight_dtype,
                     global_step,
@@ -761,9 +764,9 @@ def main(cfg: DictConfig):
             vqvae=accelerator.unwrap_model(vae),
             unet=accelerator.unwrap_model(unet),
             scheduler=noise_scheduler,
-            data_mean=train_dataset.means,
-            data_std=train_dataset.stds,
-            mask=train_dataset.mask.unsqueeze(0),
+            data_mean=data_mean,
+            data_std=data_std,
+            mask=data_mask,
         )
         pipeline.save_pretrained(args.output_dir)
 
@@ -785,7 +788,7 @@ def main(cfg: DictConfig):
 
             for i in range(len(args.validation_prompts)):
                 with torch.autocast("cuda"):
-                    image = pipeline(num_inference_steps=20, generator=generator)[0]
+                    image = pipeline(num_inference_steps=40, generator=generator)[0]
                 images.append(image)
 
         if args.push_to_hub:

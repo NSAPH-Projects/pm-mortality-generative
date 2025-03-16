@@ -27,18 +27,11 @@ def load_trained_vae(device, model_name):
     return vae
 
 def fill_nan_with_min(batch, min_vals, nan_mask):
-    device = batch.device  # Use the same device as the input tensor
-    means = means.to(dtype=batch.dtype, device=device)
     min_vals = min_vals.view(1, -1, 1, 1)  # Reshape to match (B, C, H, W) broadcasting
     filled_batch = torch.where(nan_mask, min_vals, batch)
     return filled_batch
 
 def denormalize(tensor, means, stds):
-    device = tensor.device  # Use the same device as the input tensor
-
-    means = means.to(dtype=tensor.dtype, device=device)
-    stds = stds.to(dtype=tensor.dtype, device=device)
-
     # Reshape means and stds to (C, 1, 1) or (1, C, 1, 1) depending on tensor dimensions
     mean = means.view(-1, 1, 1)
     std = stds.view(-1, 1, 1)
@@ -47,6 +40,7 @@ def denormalize(tensor, means, stds):
 
 # Scale each channel to [0, 1]. Avoid division by zero if all values are the same. Works for batched and unbatched tensors.
 def scale_channels_to_one(tensor):
+
     min_vals = tensor.amin(dim=(-2, -1), keepdim=True)  # Use amin for multi-dim min
     max_vals = tensor.amax(dim=(-2, -1), keepdim=True)  # Use amax for multi-dim max
 
@@ -58,14 +52,11 @@ def scale_channels_to_one(tensor):
 #takes a tensor and return a numpy array of the image of the components concatenated horizontally
 def channels_seperated_image(tensor, means, stds, output="pil", mask=None)-> Union[List[PIL.Image.Image], np.ndarray]:
     b, c, h, w = tensor.shape
-    print("Tensor shape before denormalize: ", tensor.shape)
     tensor = denormalize(tensor.detach(), means, stds)
     tensor = scale_channels_to_one(tensor)
-    print("Tensor shape: ", tensor.shape)
-    print("Mask shape: ", mask.shape)
     if(mask is not None): tensor = tensor * mask
     np_array = tensor.cpu().numpy()
-    images_in_row = np_array.np_array.transpose(0, 2, 1, 3).reshape(b, h, c * w)
+    images_in_row = np_array.transpose(0, 2, 1, 3).reshape(b, h, c * w)
     images_in_row = (images_in_row * 255).astype(np.uint8)
     if output == "pil":
         img_list = [Image.fromarray(img, mode="L") for img in images_in_row]
@@ -83,6 +74,7 @@ def stacked_image(generated, groundtruth, means, stds, output='pil', mask=None):
     if output == 'pil':
         return Image.fromarray(stacked_image, mode="L")
     return stacked_image
+
 
 def save_generated_images(images, mask, save_dir):
     mask = mask.cpu().numpy()  # Convert mask to NumPy
