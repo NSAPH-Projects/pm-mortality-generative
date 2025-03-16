@@ -173,7 +173,7 @@ def log_validation(vae, unet, scheduler, args, data_mean, data_std, mask, accele
             autocast_ctx = torch.autocast(accelerator.device.type)
 
         with autocast_ctx:
-            image = pipeline(num_inference_steps=20, generator=generator)[0]
+            image = pipeline(num_inference_steps=5, generator=generator)[0]
 
         images.append(image)
 
@@ -312,7 +312,7 @@ def main(cfg: DictConfig):
 
     if args.pretrained_model_name_or_path is None:
         unet = UNet2DModel(
-            sample_size=args.resolution,
+            sample_size=args.resolution,#TODO: fix this
             in_channels=vae.config.latent_channels,
             out_channels=vae.config.latent_channels,
             layers_per_block=2,
@@ -583,7 +583,7 @@ def main(cfg: DictConfig):
                     args,
                     train_dataset.means, 
                     train_dataset.stds,
-                    train_dataset.mask,
+                    train_dataset.mask.unsqueeze(0),
                     accelerator,
                     weight_dtype,
                     global_step,
@@ -741,7 +741,7 @@ def main(cfg: DictConfig):
                     args,
                     train_dataset.means,
                     train_dataset.stds,
-                    train_dataset.mask,
+                    train_dataset.mask.unsqueeze(0),
                     accelerator,
                     weight_dtype,
                     global_step,

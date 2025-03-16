@@ -58,8 +58,11 @@ def scale_channels_to_one(tensor):
 #takes a tensor and return a numpy array of the image of the components concatenated horizontally
 def channels_seperated_image(tensor, means, stds, output="pil", mask=None)-> Union[List[PIL.Image.Image], np.ndarray]:
     b, c, h, w = tensor.shape
+    print("Tensor shape before denormalize: ", tensor.shape)
     tensor = denormalize(tensor.detach(), means, stds)
     tensor = scale_channels_to_one(tensor)
+    print("Tensor shape: ", tensor.shape)
+    print("Mask shape: ", mask.shape)
     if(mask is not None): tensor = tensor * mask
     np_array = tensor.cpu().numpy()
     images_in_row = np_array.np_array.transpose(0, 2, 1, 3).reshape(b, h, c * w)
