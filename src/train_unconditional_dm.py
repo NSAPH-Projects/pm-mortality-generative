@@ -142,14 +142,15 @@ More information on all the CLI arguments and the environment are available on y
     model_card.save(os.path.join(repo_folder, "README.md"))
 
 
-def log_validation(vae, unet, scheduler, args, image_stats, mask, accelerator, weight_dtype, epoch): #we dont have multiple precision datatypes yet anyways. form_pretrained would take it as argument
+def log_validation(vae, unet, scheduler, args, data_means, data_stds, mask, accelerator, weight_dtype, epoch): #we dont have multiple precision datatypes yet anyways. form_pretrained would take it as argument
     logger.info("Running validation... ")
 
     pipeline = ULDMPipeline(
         vqvae=accelerator.unwrap_model(vae),
         unet=accelerator.unwrap_model(unet),
         scheduler=scheduler,
-        image_stats=image_stats,
+        data_means=data_means,
+        data_stds=data_stds,
         mask=mask,
     )
     pipeline = pipeline.to(accelerator.device) # we could specify the weight_datatype here as well
@@ -574,6 +575,19 @@ def main(cfg: DictConfig):
         # Only show the progress bar once on each machine.
         disable=not accelerator.is_local_main_process,
     )
+    if accelerator.is_main_process:
+        log_validation(
+                    vae,
+                    unet,
+                    noise_scheduler,
+                    args,
+                    train_dataset.means, 
+                    train_dataset.stds,
+                    train_dataset.mask,
+                    accelerator,
+                    weight_dtype,
+                    global_step,
+                )
 
     for epoch in range(first_epoch, args.num_train_epochs):
         train_loss = 0.0
@@ -725,8 +739,9 @@ def main(cfg: DictConfig):
                     unet,
                     noise_scheduler,
                     args,
-                    (train_dataset.means, train_dataset.stds),
-                    train_dataset.mask.unsqueeze(0),
+                    train_dataset.means,
+                    train_dataset.stds,
+                    train_dataset.mask,
                     accelerator,
                     weight_dtype,
                     global_step,
@@ -746,7 +761,8 @@ def main(cfg: DictConfig):
             vqvae=accelerator.unwrap_model(vae),
             unet=accelerator.unwrap_model(unet),
             scheduler=noise_scheduler,
-            image_stats=(train_dataset.means, train_dataset.stds),
+            data_means=train_dataset.means,
+            data_stds=train_dataset.stds,
             mask=train_dataset.mask.unsqueeze(0),
         )
         pipeline.save_pretrained(args.output_dir)

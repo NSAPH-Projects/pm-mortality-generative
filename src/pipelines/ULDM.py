@@ -17,6 +17,7 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 import os
 import sys
+import torch.nn as nn
 
 sys.path.append(os.path.join(os.getcwd(), "src/utils"))
 from utils import channels_seperated_image
@@ -26,6 +27,13 @@ from diffusers import UNet2DModel, VQModel, DDIMScheduler
 from diffusers.utils.torch_utils import randn_tensor
 from diffusers import DiffusionPipeline, ImagePipelineOutput
 
+
+class ExtraParamsModule(nn.Module):
+    def __init__(self, means: np.ndarray, stds: np.ndarray, mask: torch.Tensor):
+        super().__init__()
+        self.register_buffer("means", torch.tensor(means, dtype=torch.float32))
+        self.register_buffer("stds", torch.tensor(stds, dtype=torch.float32))
+        self.register_buffer("mask", mask)
 
 class ULDMPipeline(DiffusionPipeline):
     r"""
@@ -43,11 +51,10 @@ class ULDMPipeline(DiffusionPipeline):
             [`DDIMScheduler`] is used in combination with `unet` to denoise the encoded image latents.
     """
 
-    def __init__(self, vqvae: VQModel, unet: UNet2DModel, scheduler: DDIMScheduler, image_stats: Tuple[np.ndarray, np.ndarray], mask: torch.Tensor):
+    def __init__(self, vqvae: VQModel, unet: UNet2DModel, scheduler: DDIMScheduler, means:  torch.Tensor, stds:  torch.Tensor, mask: torch.Tensor):
         super().__init__()
-        self.register_modules(vqvae=vqvae, unet=unet, scheduler=scheduler)
-        self.image_stats = image_stats
-        self.mask = mask
+        self.register_modules(vqvae=vqvae, unet=unet, scheduler=scheduler, means=means, stds=stds, mask=mask)
+
 
     @torch.no_grad()
     def __call__(
@@ -125,5 +132,5 @@ class ULDMPipeline(DiffusionPipeline):
         # decode the image latents with the VAE
         image = self.vqvae.decode(latents).sample
 
-        images = channels_seperated_image(image, self.image_stats[0], self.image_stats[1], output=output_type ,mask=self.mask)
+        images = channels_seperated_image(image, self.means, self.stds, output=output_type ,mask=self.mask)
         return images

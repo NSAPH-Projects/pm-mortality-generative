@@ -27,21 +27,21 @@ def load_trained_vae(device, model_name):
     return vae
 
 def fill_nan_with_min(batch, min_vals, nan_mask):
-    min_vals = torch.FloatTensor(min_vals).to(batch.device)
+    device = batch.device  # Use the same device as the input tensor
+    means = means.to(dtype=batch.dtype, device=device)
     min_vals = min_vals.view(1, -1, 1, 1)  # Reshape to match (B, C, H, W) broadcasting
     filled_batch = torch.where(nan_mask, min_vals, batch)
     return filled_batch
 
 def denormalize(tensor, means, stds):
     device = tensor.device  # Use the same device as the input tensor
-    
-    mean = torch.as_tensor(means, dtype=tensor.dtype, device=device).view(-1, 1, 1)  # (1, C, 1, 1)
-    std = torch.as_tensor(stds, dtype=tensor.dtype, device=device).view(-1, 1, 1)    # (1, C, 1, 1)
-    
-    #if we want to denormalize a batch of images
-    if(tensor.dim() == 4):
-        mean = mean.unsqueeze(0)
-        std = std.unsqueeze(0)
+
+    means = means.to(dtype=tensor.dtype, device=device)
+    stds = stds.to(dtype=tensor.dtype, device=device)
+
+    # Reshape means and stds to (C, 1, 1) or (1, C, 1, 1) depending on tensor dimensions
+    mean = means.view(-1, 1, 1)
+    std = stds.view(-1, 1, 1)
 
     return tensor * std + mean
 
