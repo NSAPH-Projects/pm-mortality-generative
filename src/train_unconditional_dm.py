@@ -142,15 +142,15 @@ More information on all the CLI arguments and the environment are available on y
     model_card.save(os.path.join(repo_folder, "README.md"))
 
 
-def log_validation(vae, unet, scheduler, args, data_means, data_stds, mask, accelerator, weight_dtype, epoch): #we dont have multiple precision datatypes yet anyways. form_pretrained would take it as argument
+def log_validation(vae, unet, scheduler, args, data_mean, data_std, mask, accelerator, weight_dtype, epoch): #we dont have multiple precision datatypes yet anyways. form_pretrained would take it as argument
     logger.info("Running validation... ")
 
     pipeline = ULDMPipeline(
         vqvae=accelerator.unwrap_model(vae),
         unet=accelerator.unwrap_model(unet),
         scheduler=scheduler,
-        data_means=data_means,
-        data_stds=data_stds,
+        data_mean=data_mean,
+        data_std=data_std,
         mask=mask,
     )
     pipeline = pipeline.to(accelerator.device) # we could specify the weight_datatype here as well
@@ -761,8 +761,8 @@ def main(cfg: DictConfig):
             vqvae=accelerator.unwrap_model(vae),
             unet=accelerator.unwrap_model(unet),
             scheduler=noise_scheduler,
-            data_means=train_dataset.means,
-            data_stds=train_dataset.stds,
+            data_mean=train_dataset.means,
+            data_std=train_dataset.stds,
             mask=train_dataset.mask.unsqueeze(0),
         )
         pipeline.save_pretrained(args.output_dir)

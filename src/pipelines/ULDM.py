@@ -51,9 +51,9 @@ class ULDMPipeline(DiffusionPipeline):
             [`DDIMScheduler`] is used in combination with `unet` to denoise the encoded image latents.
     """
 
-    def __init__(self, vqvae: VQModel, unet: UNet2DModel, scheduler: DDIMScheduler, means:  torch.Tensor, stds:  torch.Tensor, mask: torch.Tensor):
+    def __init__(self, vqvae: VQModel, unet: UNet2DModel, scheduler: DDIMScheduler, data_mean:  torch.Tensor, data_std:  torch.Tensor, mask: torch.Tensor):
         super().__init__()
-        self.register_modules(vqvae=vqvae, unet=unet, scheduler=scheduler, means=means, stds=stds, mask=mask)
+        self.register_modules(vqvae=vqvae, unet=unet, scheduler=scheduler, data_mean=data_mean, data_std=data_std, mask=mask)
 
 
     @torch.no_grad()
@@ -132,5 +132,5 @@ class ULDMPipeline(DiffusionPipeline):
         # decode the image latents with the VAE
         image = self.vqvae.decode(latents).sample
 
-        images = channels_seperated_image(image, self.means, self.stds, output=output_type ,mask=self.mask)
+        images = channels_seperated_image(image, self.data_mean, self.data_std, output=output_type ,mask=self.mask)
         return images
