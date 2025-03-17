@@ -16,6 +16,6 @@ TRAINING_SCRIPT="src/train_unconditional_dm.py"
 module load python/3.10.13-fasrc01
 conda deactivate
 conda activate $CONDA_ENV
- 
+
 # Run program
 accelerate launch --config_file conf/accelerate/cannon.yaml $TRAINING_SCRIPT run_id=$SLURM_JOB_ID
