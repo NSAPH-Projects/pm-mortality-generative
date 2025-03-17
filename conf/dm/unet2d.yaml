@@ -9,7 +9,7 @@ image_column: "image"  # The column of the dataset containing an image.
 caption_column: "text"  # The column of the dataset containing a caption or a list of captions.
 max_train_samples: null  # For debugging purposes or quicker training, truncate the number of training examples to this value if set.
 validation_prompts: null  # A set of prompts evaluated every `--validation_epochs` and logged to `--report_to`.
-output_dir: "sd-model-finetuned"  # The output directory where the model predictions and checkpoints will be written.
+output_dir: ".outputs/sd-model-finetuned"  # The output directory where the model predictions and checkpoints will be written.
 cache_dir: null  # The directory where the downloaded models and datasets will be stored.
 seed: null  # A seed for reproducible training.
 resolution: 512  # The resolution for input images, all the images in the train/validation dataset will be resized to this resolution
@@ -48,7 +48,7 @@ mixed_precision: null  # Whether to use mixed precision. Choose between fp16 and
 report_to: "wandb"  # The integration to report the results and logs to. Supported platforms are `"tensorboard"` (default), `"wandb"` and `"comet_ml"`. Use `"all"` to report to all integrations.
 local_rank: -1  # For distributed training: local_rank
 checkpointing_steps: 5000  # Save a checkpoint of the training state every X updates. These checkpoints are only suitable for resuming training using `--resume_from_checkpoint`.
-checkpoints_total_limit: null  # Max number of checkpoints to store.
+checkpoints_total_limit: 2  # Max number of checkpoints to store.
 resume_from_checkpoint: null  # Whether training should be resumed from a previous checkpoint. Use a path saved by `--checkpointing_steps`, or `"latest"` to automatically select the last available checkpoint.
 enable_xformers_memory_efficient_attention: false  # Whether or not to use xformers.
 noise_offset: 0.0  # The scale of noise offset.
