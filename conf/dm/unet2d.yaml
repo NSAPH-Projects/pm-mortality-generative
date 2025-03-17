@@ -15,8 +15,8 @@ seed: null  # A seed for reproducible training.
 resolution: 512  # The resolution for input images, all the images in the train/validation dataset will be resized to this resolution
 center_crop: false  # Whether to center crop the input images to the resolution. If not set, the images will be randomly cropped. The images will be resized to the resolution first before cropping.
 random_flip: false  # whether to randomly flip images horizontally
-train_batch_size: 100  # Batch size (per device) for the training dataloader.
-num_train_epochs: 100
+train_batch_size: 64  # Batch size (per device) for the training dataloader.
+num_train_epochs: 150
 max_train_steps: null  # Total number of training steps to perform.  If provided, overrides num_train_epochs.
 gradient_accumulation_steps: 1  # Number of updates steps to accumulate before performing a backward/update pass.
 gradient_checkpointing: false  # Whether or not to use gradient checkpointing to save memory at the expense of slower backward pass.
@@ -28,7 +28,7 @@ snr_gamma: null  # SNR weighting gamma to be used if rebalancing the loss. Recom
 dream_training: false  # Use the DREAM training method, which makes training more efficient and accurate at the expense of doing an extra forward pass. See: https://arxiv.org/abs/2312.00210
 dream_detail_preservation: 1.0  # Dream detail preservation factor p (should be greater than 0; default=1.0, as suggested in the paper)
 use_8bit_adam: false  # Whether or not to use 8-bit Adam from bitsandbytes.
-allow_tf32: false  # Whether or not to allow TF32 on Ampere GPUs. Can be used to speed up training. For more information, see https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
+allow_tf32: true  # Whether or not to allow TF32 on Ampere GPUs. Can be used to speed up training. For more information, see https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
 use_ema: false  # Whether to use EMA model.
 offload_ema: false  # Offload EMA model to CPU during training step.
 foreach_ema: false # Use faster foreach implementation of EMAModel.
