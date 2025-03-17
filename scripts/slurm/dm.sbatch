@@ -14,6 +14,6 @@ conda deactivate
 conda deactivate
 conda deactivate
 conda activate /net/rcstorenfs02/ifs/rc_labs/dominici_lab/lab/projects/pm-mortality-generative/ahmet/diffusers/conda_env
-
+ 
 # Run program
 accelerate launch src/train_unconditional_dm.py run_id=$SLURM_JOB_ID
