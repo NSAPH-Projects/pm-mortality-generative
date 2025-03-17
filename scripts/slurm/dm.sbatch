@@ -8,12 +8,14 @@
 #SBATCH -o ./run_logs/pytorch_%j.out 
 #SBATCH -e ./run_logs/pytorch_%j.err 
 
+# Conda environment location
+CONDA_ENV="/net/rcstorenfs02/ifs/rc_labs/dominici_lab/lab/projects/pm-mortality-generative/ahmet/diffusers/conda_env"
+TRAINING_SCRIPT="src/train_unconditional_dm.py"
+
 # Load software modules and source conda environment
 module load python/3.10.13-fasrc01
 conda deactivate
-conda deactivate
-conda deactivate
-conda activate /net/rcstorenfs02/ifs/rc_labs/dominici_lab/lab/projects/pm-mortality-generative/ahmet/diffusers/conda_env
+conda activate $CONDA_ENV
 
 # Run program
-accelerate launch src/train_unconditional_dm.py run_id=$SLURM_JOB_ID
+accelerate launch --config_file conf/accelerate/cannon.yaml $TRAINING_SCRIPT run_id=$SLURM_JOB_ID
