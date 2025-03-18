@@ -66,14 +66,16 @@ def channels_seperated_image(tensor, means, stds, output="pil", mask=None)-> Uni
 #this function is to create a pil image that can help us compare the ground truth and the generated images
 def stacked_image(generated, groundtruth, means, stds, output='pil', mask=None):
     #check if the batch size of the generated and groundtruth images are 1
-    assert generated.shape[0] == 1 and groundtruth.shape[0] == 1, "Batch size must be 1"
     
-    generated = channels_seperated_image(generated, means, stds, output="numpy" , mask=mask)[0]
-    groundtruth = channels_seperated_image(groundtruth, means, stds, output="numpy" , mask=mask)[0]
-    stacked_image = np.concatenate((generated, groundtruth), axis=-1)
+    generated = channels_seperated_image(generated, means, stds, output="numpy" , mask=mask)
+    groundtruth = channels_seperated_image(groundtruth, means, stds, output="numpy")
+    result = []
+    for i in range(len(generated)):
+        stacked_image = np.concatenate((generated[i], groundtruth[i]), axis=0)
+        result.append(stacked_image)
     if output == 'pil':
-        return Image.fromarray(stacked_image, mode="L")
-    return stacked_image
+        return [Image.fromarray(img, mode="L") for img in result]
+    return np.stack(result)
 
 
 def save_generated_images(images, mask, save_dir):

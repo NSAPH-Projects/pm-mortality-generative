@@ -12,8 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-import argparse
 import math
 import os
 import shutil
@@ -21,19 +19,14 @@ import time
 from pathlib import Path
 
 import accelerate
-import numpy as np
-import PIL.Image
 import torch
 import torch.nn.functional as F
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from accelerate.utils import DistributedType, ProjectConfiguration, set_seed
-from datasets import load_dataset
 from discriminator import Discriminator
 from huggingface_hub import create_repo
 from packaging import version
-from PIL import Image
-from torchvision import transforms
 from tqdm import tqdm
 
 from diffusers import VQModel
@@ -41,14 +34,11 @@ from diffusers.optimization import get_scheduler
 from diffusers.training_utils import EMAModel
 from diffusers.utils import check_min_version, is_wandb_available
 
-
-
-
+from dataloader import washu_dataloader as wu_dl
 import sys
-sys.path.append(os.path.join(os.getcwd(), "src/dataloader"))
 sys.path.append(os.path.join(os.getcwd(), "src/utils"))
-import washu_dataloader as wu_dl
-from utils import channels_seperated_image, fill_nan_with_min
+
+from utils import fill_nan_with_min, stacked_image
 
 import hydra
 from omegaconf import DictConfig
@@ -109,30 +99,29 @@ def gradient_penalty(images, output, weight=10):
 
 
 @torch.no_grad()
-def log_validation(model, args, dataset, accelerator, global_step):
+def log_validation(model, dataset, accelerator, global_step, dtype, data_mean, data_std, data_min_val, validation_indices=[2,8,20,114,116]):
     logger.info("Generating images...")
-    dtype = torch.float32
-    if accelerator.mixed_precision == "fp16":
-        dtype = torch.float16
-    elif accelerator.mixed_precision == "bf16":
-        dtype = torch.bfloat16
-    
-    sample = dataset.__getitem__(0).unsqueeze(0).to(accelerator.device, dtype=dtype)
-    mask = ~torch.isnan(sample)
-    original_image_bt = fill_nan_with_min(sample, dataset.min_vals, ~mask) #this is same as first filling nan with zero and then normalizing. But we first normalize
+
+    val_data = []
+    for i in validation_indices:
+        sample = dataset.__getitem__(i).to(accelerator.device, dtype=dtype)
+        val_data.append(sample)
+    val_data = torch.stack(val_data)
+    mask = ~torch.isnan(val_data)
+    original_image_bt = fill_nan_with_min(val_data, data_min_val, ~mask) #this is same as first filling nan with zero and then normalizing. But we first normalize
     generated_image_bt = accelerator.unwrap_model(model)(original_image_bt).sample
     model.train()
     
-    original_image = channels_seperated_image(original_image_bt, dataset.means, dataset.stds)[0]
-    generated_image = channels_seperated_image(generated_image_bt, dataset, dataset.means, dataset.stds)[0]
-    masked_image = channels_seperated_image(generated_image_bt, dataset,  dataset.means, dataset.stds, mask=mask[0])[0]
+    validation_images = stacked_image(generated_image_bt, original_image_bt, data_mean, data_std, output="pil", mask=mask)
     # Log images
     for tracker in accelerator.trackers:
         if tracker.name == "wandb":
             tracker.log(
-                {"input_images": [wandb.Image(original_image)],
-                           "masked_reconstructed_images": [wandb.Image(masked_image)],
-                            "reconstructed_images": [wandb.Image(generated_image)] },
+                {
+                    "validation": [
+                        wandb.Image(image, caption=f"{i}: Upper : Generated, Lower : Original") for i, image in enumerate(validation_images)
+                    ]
+                },
                 step=global_step,
             )
     torch.cuda.empty_cache()
@@ -147,9 +136,19 @@ def log_grad_norm(model, accelerator, global_step):
             accelerator.log({"grad_norm/" + name: grad_norm}, step=global_step)
 
 
-@hydra.main(config_path="../../conf", config_name="config", version_base=None)
+@hydra.main(config_path="../conf", config_name="config", version_base=None)
 def main(cfg: DictConfig):
     args = cfg.ae
+
+    env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
+    if env_local_rank != -1 and env_local_rank != args.local_rank:
+        args.local_rank = env_local_rank
+
+    # default to using the same revision for the non-ema model if not specified
+    if args.non_ema_revision is None:
+        args.non_ema_revision = args.revision
+
+   
     #########################
     # SETUP Accelerator     #
     #########################
@@ -171,7 +170,7 @@ def main(cfg: DictConfig):
     )
 
     if accelerator.distributed_type == DistributedType.DEEPSPEED:
-        accelerator.state.deepspeed_plugin.deepspeed_config["train_micro_batch_size_per_gpu"] = cfg.train_batch_size
+        accelerator.state.deepspeed_plugin.deepspeed_config["train_micro_batch_size_per_gpu"] = args.train_batch_size
 
     #####################################
     # SETUP LOGGING, SEED and CONFIG    #
@@ -184,7 +183,7 @@ def main(cfg: DictConfig):
 
     # If passed along, set the training seed now.
     if cfg.seed is not None:
-        set_seed(cfg.seed) 
+        set_seed(args.seed) 
 
     # Handle the repository creation
     if accelerator.is_main_process:
@@ -317,12 +316,26 @@ def main(cfg: DictConfig):
     #################################
     logger.info("Creating dataloaders and lr_scheduler")
 
-    
-    args.train_batch_size * accelerator.num_processes
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
 
+    with accelerator.main_process_first():
+        train_dataset = wu_dl.initialize_dataset(cfg.root_dir, cfg.grid_size, cfg.components)      
+    
+    weight_dtype = torch.float32
+    if accelerator.mixed_precision == "fp16":
+        weight_dtype = torch.float16
+        args.mixed_precision = accelerator.mixed_precision
+    elif accelerator.mixed_precision == "bf16":
+        weight_dtype = torch.bfloat16
+        args.mixed_precision = accelerator.mixed_precision
 
-    train_dataset = wu_dl.initialize_dataset(cfg.root_dir, cfg.grid_size, cfg.components)      
+
+    data_mean = train_dataset.means.to(dtype=weight_dtype, device=accelerator.device)
+    data_std = train_dataset.stds.to(dtype=weight_dtype, device=accelerator.device)
+    data_min_val = train_dataset.min_vals.to(dtype=weight_dtype, device=accelerator.device)
+    data_mask = train_dataset.mask.to(device=accelerator.device)
+
+
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset,
         shuffle=True,
@@ -346,8 +359,8 @@ def main(cfg: DictConfig):
     # Prepare everything with accelerator
     logger.info("Preparing model, optimizer and dataloaders")
     # The dataloader are already aware of distributed training, so we don't need to prepare them.
-    model, discriminator, optimizer, discr_optimizer, lr_scheduler, discr_lr_scheduler = accelerator.prepare(
-        model, discriminator, optimizer, discr_optimizer, lr_scheduler, discr_lr_scheduler
+    model, discriminator, optimizer, discr_optimizer, lr_scheduler, discr_lr_scheduler, train_dataloader = accelerator.prepare(
+        model, discriminator, optimizer, discr_optimizer, lr_scheduler, discr_lr_scheduler, train_dataloader
     )
     if args.use_ema:
         ema_model.to(accelerator.device)
@@ -405,6 +418,7 @@ def main(cfg: DictConfig):
         # Only show the progress bar once on each machine.
         disable=not accelerator.is_local_main_process,
     )
+
     # As stated above, we are not doing epoch based training here, but just using this for book keeping and being able to
     # reuse the same training loop with other datasets/loaders.
     avg_gen_loss, avg_discr_loss = None, None
@@ -412,9 +426,8 @@ def main(cfg: DictConfig):
         model.train()
         discriminator.train()
         for i, batch in enumerate(train_dataloader):
-            batch = batch.to(accelerator.device, non_blocking=True)
             mask = ~torch.isnan(batch)
-            pixel_values = fill_nan_with_min(batch, train_dataset.min_vals, ~mask)
+            pixel_values = fill_nan_with_min(batch, data_min_val, ~mask)
 
             data_time_m.update(time.time() - end)
             generator_step = ((i // args.gradient_accumulation_steps) % 2) == 0
@@ -430,7 +443,7 @@ def main(cfg: DictConfig):
             # Return commit loss
             fmap, commit_loss = model(pixel_values, return_dict=False)
             # Make the values corresponding to nan in the input min. we will only use mask to calculate l2,l1 loss after here. for discr. it is not necessary
-            fmap = fill_nan_with_min(fmap, train_dataset.min_vals, ~mask)
+            fmap = fill_nan_with_min(fmap, data_min_val, ~mask)
 
             if generator_step:
                 with accelerator.accumulate(model):
@@ -555,7 +568,7 @@ def main(cfg: DictConfig):
                         # Store the VQGAN parameters temporarily and load the EMA parameters to perform inference.
                         ema_model.store(model.parameters())
                         ema_model.copy_to(model.parameters())
-                    log_validation(model, args, train_dataset, accelerator, global_step)
+                    log_validation(model, train_dataset, accelerator, global_step, weight_dtype, data_mean, data_std, data_min_val)
                     if args.use_ema:
                         # Switch back to the original VQGAN parameters.
                         ema_model.restore(model.parameters())
