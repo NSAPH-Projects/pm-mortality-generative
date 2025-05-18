@@ -1,10 +1,12 @@
-from diffusers import AutoencoderKL
+from diffusers import AutoencoderKL, VQModel
 import torch
+import PIL
 from PIL import Image
 import numpy as np
 import os
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
+from typing import Union, List
 
 import sys
 import os
@@ -13,8 +15,59 @@ import hydra
 from omegaconf import DictConfig
 
 # Add the dataloader directory to the Python path
-sys.path.append(os.path.join(os.getcwd(), "dataloader"))
-import washu_dataloader as wu_dl
+sys.path.append(os.path.join(os.getcwd(), "src/dataloader"))
+import washu_dataloader as wu_dl # i dont think we need this anymore
+
+def fill_nan_with_min(batch, min_vals, nan_mask):
+    min_vals = min_vals.view(1, -1, 1, 1)  # Reshape to match (B, C, H, W) broadcasting
+    filled_batch = torch.where(nan_mask, min_vals, batch)
+    return filled_batch
+
+def denormalize(tensor, means, stds):
+    # Reshape means and stds to (C, 1, 1) or (1, C, 1, 1) depending on tensor dimensions
+    mean = means.view(-1, 1, 1)
+    std = stds.view(-1, 1, 1)
+
+    return tensor * std + mean
+
+# Scale each channel to [0, 1]. Avoid division by zero if all values are the same. Works for batched and unbatched tensors.
+def scale_channels_to_one(tensor):
+
+    min_vals = tensor.amin(dim=(-2, -1), keepdim=True)  # Use amin for multi-dim min
+    max_vals = tensor.amax(dim=(-2, -1), keepdim=True)  # Use amax for multi-dim max
+
+    return torch.where(
+        max_vals == min_vals, 
+        torch.ones_like(tensor),  
+        (tensor - min_vals) / (max_vals - min_vals))
+
+#takes a tensor and return a numpy array of the image of the components concatenated horizontally
+def channels_seperated_image(tensor, means, stds, output="pil", mask=None)-> Union[List[PIL.Image.Image], np.ndarray]:
+    b, c, h, w = tensor.shape
+    tensor = denormalize(tensor.detach(), means, stds)
+    tensor = scale_channels_to_one(tensor)
+    if(mask is not None): tensor = tensor * mask
+    np_array = tensor.cpu().numpy()
+    images_in_row = np_array.transpose(0, 2, 1, 3).reshape(b, h, c * w)
+    images_in_row = (images_in_row * 255).astype(np.uint8)
+    if output == "pil":
+        img_list = [Image.fromarray(img, mode="L") for img in images_in_row]
+        return img_list
+    return images_in_row
+
+#this function is to create a pil image that can help us compare the ground truth and the generated images
+def stacked_image(generated, groundtruth, means, stds, output='pil', mask=None):
+    #check if the batch size of the generated and groundtruth images are 1
+    
+    generated = channels_seperated_image(generated, means, stds, output="numpy" , mask=mask)
+    groundtruth = channels_seperated_image(groundtruth, means, stds, output="numpy")
+    result = []
+    for i in range(len(generated)):
+        stacked_image = np.concatenate((generated[i], groundtruth[i]), axis=0)
+        result.append(stacked_image)
+    if output == 'pil':
+        return [Image.fromarray(img, mode="L") for img in result]
+    return np.stack(result)
 
 
 def load_trained_vae(device, model_name):
@@ -24,27 +77,6 @@ def load_trained_vae(device, model_name):
     vae.eval()  # Set to evaluation mode
     return vae
 
-# Scale each channel to [0, 1]. Avoid division by zero if all values are the same
-def scale_each_channel(tensor):
-        
-    min_vals = tensor.amin(dim=(1, 2), keepdim=True)  # Use amin for multi-dim min
-    max_vals = tensor.amax(dim=(1, 2), keepdim=True)  # Use amax for multi-dim max
-
-    return torch.where(
-        max_vals == min_vals, 
-        torch.ones_like(tensor),  
-        (tensor - min_vals) / (max_vals - min_vals))
-
-#takes a tensor and return an image of the components concatenated horizontally
-def image_as_grid(tensor, dataset, mask=None):
-    tensor = dataset.denormalize(tensor.detach())
-    tensor = scale_each_channel(tensor)
-    if(mask is not None): tensor = tensor * mask
-    np_array = tensor.cpu().numpy()
-    stacked_images = np.hstack(np_array)
-    stacked_images = (stacked_images * 255).astype(np.uint8)
-    img_pil = Image.fromarray(stacked_images, mode="L")
-    return img_pil
 
 def save_generated_images(images, mask, save_dir):
     mask = mask.cpu().numpy()  # Convert mask to NumPy
@@ -111,13 +143,15 @@ def reconstruct_samples_via_vae(vae, device, dataloader, model_name):
     print(f"Reconstructed images saved in '{save_dir}'")
     return latent_shape
 
-def save_images_from_dataset(dataloader, save_dir="./experiments/dataset_samples_normalized"):
+def save_images_from_dataset(dataloader, save_dir="./experiments/dataset_samples"):
     # Save real images from the dataset
+    os.makedirs(save_dir, exist_ok=True)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     batch, mask = next(iter(dataloader))
-    #batch = denormalize(batch.to(device))
+    batch = denormalize(batch.to(device))
+    batch = scale_channels_to_one(batch)
     real_images = batch.cpu().numpy()
-    os.makedirs(save_dir, exist_ok=True)
     num_outcomes = real_images.shape[1]
 
     for outcome_idx in range(num_outcomes):
@@ -156,17 +190,27 @@ def main(cfg: DictConfig):
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "mps")
-    main()
-    # Load the trained VAE
-    #model_name = "sd_vae"
-    #vae = load_trained_vae(device, model_name)
-    #dataloader = initialize_data_loader(components = ["PM25", "BC"], batch_size=6, shuffle=False, img_size=(128, 256))
-
-    #_, mask = next(iter(dataloader))
+    #main()
+    #Load the trained VAE
+    model_name = "vqmodel"
+    model_path = f"./models/{model_name}"
+    vae = VQModel.from_pretrained(model_path).to(device)
+    vae.eval()  # Set to evaluation mode
+    
+    dataset = wu_dl.initialize_dataset(cfg.root_dir, cfg.grid_size, cfg.components)      
+    loader = DataLoader(
+        dataset,
+        batch_size=cfg.batch_size,   #256,512 image size on "simple" vae allowed batch size of 6. But we want to train and experiment faster
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
+        persistent_workers=True,
+    )
+    _, mask = next(iter(dataloader))
 
     # Reconstruct samples via VAE
-    #latent_shape = reconstruct_samples_via_vae(vae,device, dataloader, model_name=model_name)
-    #print("Latent shape: ", latent_shape)
+    latent_shape = reconstruct_samples_via_vae(vae, device, dataloader, model_name=model_name)
+    print("Latent shape: ", latent_shape)
 
     # Generate samples from random noise
     #generate_samples_from_noise(vae, device=device,mask=mask, batch_size=6,latent_dim=latent_shape[1:], model_name=model_name)
