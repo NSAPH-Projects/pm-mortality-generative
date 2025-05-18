@@ -1,0 +1,5 @@
+dep_len: 3 #length of history dependence
+train_size: 10000 #training data size. We recommend train_size = 50000*d or even more for optimal results
+buffer: 30
+pop_size: 1000 # number of individuals
+num_test_cov: 2

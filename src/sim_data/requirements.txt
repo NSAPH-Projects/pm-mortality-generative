@@ -1,0 +1,10 @@
+matplotlib
+numpy
+pandas
+scikit_learn
+scipy
+torch
+torchvision
+tqdm
+jupyter
+hydra-core

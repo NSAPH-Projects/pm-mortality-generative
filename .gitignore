@@ -12,3 +12,4 @@ playground.py
 __pycache__/
 src/vqgan/vqgan-output/*
 outputs/*
+src/sim_data/logs/*
