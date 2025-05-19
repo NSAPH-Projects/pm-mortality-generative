@@ -1,5 +1,9 @@
 dep_len: 3 #length of history dependence
-train_size: 10000 #training data size. We recommend train_size = 50000*d or even more for optimal results
-buffer: 30
-pop_size: 1000 # number of individuals
-num_test_cov: 2
+train_size: 1000 #training data size. We recommend train_size = 50000*d or even more for optimal results
+buffer: 100
+pop_size: 10000 # number of individuals
+num_test_cov: 4
+covariate_model : "mixture"
+covariate_var: 0.1
+covariate_mean_difference: 0.5
+covariate_mixture_weight: 0.5
