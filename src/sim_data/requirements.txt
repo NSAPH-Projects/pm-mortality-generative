@@ -8,3 +8,4 @@ torchvision
 tqdm
 jupyter
 hydra-core
+seaborn

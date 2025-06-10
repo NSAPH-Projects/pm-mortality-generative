@@ -224,11 +224,13 @@ def simulator(
             + np.dot(L_win_full, betas[1+d:])
         )
         A[:, t] = np.random.binomial(1, A_f[:, t])
+
+        A_win_full = A[:, t-d:t+1]  # (S, d+1)
         
         Y[:, t-d] = (
             alphas[0]
-            + np.dot(A_win, alphas[1:1+d])
-            + np.dot(L_win, alphas[1+d:])
+            + np.dot(A_win_full, alphas[1:2+d])
+            + np.dot(L_win_full, alphas[2+d:])
         )
     
     # slice off buffer
@@ -256,7 +258,7 @@ def data_conditional_on_cov_and_treatment(
     p_X = 0.5,
     model_X: str = "id"
 ):
-    subset = initial_sim_data[:, idx, :]  # (4, n_test, num_time_steps)
+    subset = initial_sim_data[:3, idx, :]  # (3, n_test, num_time_steps)
     n_test = idx.shape[0]
 
     L = np.zeros((n_test, S, 2*d+1))
@@ -266,7 +268,7 @@ def data_conditional_on_cov_and_treatment(
 
     # broadcast history
     for arr, vals in zip((Y, L, A, A_f), subset):
-        arr[:, :, :d] = vals[:, None, :d]
+        arr[:, :, :d+1] = vals[:, None, :d+1]
 
     for t in range(d, 2*d+1):
         A_win = A[:, :, t-d:t]   # (n_test, S, d)
@@ -296,21 +298,24 @@ def data_conditional_on_cov_and_treatment(
         )
         A[:,:,t] = np.random.binomial(1, A_f[:,:, t])
 
+        A_win_full = A[:, :, t-d:t+1]  # (n_test, S, d+1)
         Y[:, :, t] = (
             alphas[0]
-            + np.dot(A_win, alphas[1:1+d])
-            + np.dot(L_win, alphas[1+d:])
+            + np.dot(A_win_full, alphas[1:2+d])
+            + np.dot(L_win_full, alphas[2+d:])
         )
+        
+        
     # --- build treatment‐match mask ---
-    mask = (A[:, :, d:2*d] == treatment.reshape(1,1,d)).all(axis=2)  # (n_test, S)
+    mask = (A[:, :, d:2*d+1] == treatment.reshape(1,1,d+1)).all(axis=2)  # (n_test, S)
     counts = mask.sum(axis=1)
     m      = int(counts.min())   # number of trajectories we can keep per test‐case
 
     # --- filter baseline (first d of L) and final Y ---
-    L_base   = L[:, :, :d]       # (n_test, S, d)
+    L_base   = L[:, :, :d+1]       # (n_test, S, d)
     Y_final  = Y[:, :, -1]       # (n_test, S)
 
-    L_out = np.zeros((n_test, m, d))
+    L_out = np.zeros((n_test, m, d+1))
     Y_out = np.zeros((n_test, m))
 
     for i in range(n_test):
@@ -333,19 +338,19 @@ def conditional_intervened_data(
     p_X = 0.5,
     model_X: str = "id"
 ):
-    subset = initial_sim_data[:, idx, :]  # (4, n_test, num_time_steps)
+    subset = initial_sim_data[:3, idx, :]  # (3, n_test, num_time_steps)
     n_test = idx.shape[0]
 
     L = np.zeros((n_test, S, 2*d+1))
-    A = np.zeros((n_test, S, 2*d))
+    A = np.zeros((n_test, S, 2*d+1))
     Y = np.zeros((n_test, S, 2*d+1))
 
     # broadcast history
     for arr, vals in zip((Y, L, A), subset):
-        arr[:, :, :d] = vals[:, None, :d]
+        arr[:, :, :d+1] = vals[:, None, :d+1]
 
     # intervention
-    A[:, :, d:2*d] = intervention[None, None, :]
+    A[:, :, d:2*d+1] = intervention[None, None, :]
 
     for t in range(d, 2*d+1):
         A_win = A[:, :, t-d:t]   # (n_test, S, d)
@@ -367,34 +372,68 @@ def conditional_intervened_data(
             locs  = L_f + np.where(upper, +mean_diff_X, -mean_diff_X)
             L[:, :, t] = np.random.normal(loc=locs, scale=var_X)
 
+        A_win_full = A[:, :, t-d:t+1]  # (n_test, S, d+1)
+        L_win_full = L[:, :, t-d:t+1]  # (n_test, S, d+1)
+
+        #print(A_win_full.shape, alphas[1:2+d].__len__())
         Y[:, :, t] = (
             alphas[0]
-            + np.dot(A_win, alphas[1:1+d])
-            + np.dot(L_win, alphas[1+d:])
+            + np.dot(A_win_full, alphas[1:2+d])
+            + np.dot(L_win_full, alphas[2+d:])
         )
 
-    return subset[:, :, :d], Y[:, :, -1]
+    return subset[:, :, :d+1], Y[:, :, -1]
+
+def horizon_zero_distr(
+    d: int,
+    initial_sim_data: np.ndarray,
+    idx: np.ndarray,
+    alphas: np.ndarray,
+    S: int
+):
+    subset = initial_sim_data[:3, idx, :]  # (3, n_test, num_time_steps)
+    n_test = idx.shape[0]
+
+    L = np.zeros((n_test, S, d+1))
+    A = np.zeros((n_test, S, d+1))
+    Y = np.zeros((n_test, S, d+1))
+
+    # broadcast history
+    for arr, vals in zip((Y, L, A), subset):
+        arr[:, :, :d+1] = vals[:, None, :d+1]
+
+    A_win_full = A[:, :, 0:d+1]  # (n_test, S, d+1)
+    L_win_full = L[:, :, 0:d+1]  # (n_test, S, d+1)
+
+    Y[:, :, d] = (
+        alphas[0]
+        + np.dot(A_win_full, alphas[1:2+d])
+        + np.dot(L_win_full, alphas[2+d:])
+    )
+
+    return subset[:, :, :d+1], Y[:, :, -1]
 
 def get_coefficients(d):
 
     if d==1:
-        ycoeff = [-3,2,-1] # Y
-        acoeff = [-0.5,0.5,-0.5,0.5] # A
-        xcoeff = [0,1,-1] # X
+        ycoeff = [-3,2,0,-1,0]
+        acoeff = [-0.5,0.5,-0.5,0.5]
+        xcoeff = [0,1,-1]
     elif d==3:
-        ycoeff=[-1] + [3,6,12] + [0.5,1,2]# Y
-        acoeff= [-0.5] + [0.5,-0.5,0.5] + [-0.5,0.5,-0.5,0.5]# A
-        xcoeff= [-1] + [0.5,1,1.5] + [-0.5,-1,-1.5]# X
+        ycoeff=[-1] + [3,6,12,1] + [0.5,1,2,1]
+        acoeff= [-0.5] + [0.5,-0.5,0.5] + [-0.5,0.5,-0.5,0.5]
+        xcoeff= [-1] + [0.5,1,1.5] + [-0.5,-1,-1.5]
     else:
-        ycoeff=[-1] + [0.5,1,3,6,12] + [0.05,0.1, 0.5,1,2]# Y
-        acoeff= [-0.5] + [0.5,-0.5,0.5,-0.5,0.5] + [-0.5,0.5,-0.5,0.5,-0.5,0.5]# A
-        xcoeff= [-1] + [0.05,0.1, 0.5,1,1.5] + [-0.05,-0.1, -0.5,-1,-1.5]  # X
+        ycoeff=[-1] + [0.5,1,3,6,12,0] + [0.05,0.1, 0.5,1,2,0]
+        acoeff= [-0.5] + [0.5,-0.5,0.5,-0.5,0.5] + [-0.5,0.5,-0.5,0.5,-0.5,0.5]
+        xcoeff= [-1] + [0.05,0.1, 0.5,1,1.5] + [-0.05,-0.1, -0.5,-1,-1.5]
     
     return ycoeff, acoeff, xcoeff
 
 def save_history_npz(H: np.ndarray, Y: np.ndarray, folder: str='data/sim-data', fname: str='horizon_3.npz'):
     os.makedirs(folder, exist_ok=True)
     np.savez_compressed(os.path.join(folder, fname), H=H, Y=Y)
+
 
 def create_training_data(cfg: DictConfig):
     num_time_steps = cfg.data.train_size + cfg.data.buffer + 2 * cfg.data.dep_len
@@ -420,31 +459,43 @@ def visualize_data(cfg: DictConfig):
     print('Simulated data shape:', data.shape)
     plot_marginal_distributions(data)
 
-    interventions = np.array([[0, 0, 0], [1,1,1]])
+    interventions = np.array([[0, 0, 0, 0], [1,1,1,1]])
     if cfg.data.dep_len == 1 : interventions = np.array([[0], [1]])
     if cfg.data.dep_len == 5 : interventions = np.array([[0,0,0,0,0]])
-    assert interventions.shape[1] == cfg.data.dep_len, "Intervention length must be equal to dep_len"
+    assert interventions.shape[1] == cfg.data.dep_len + 1, "Intervention length must be equal to dep_len"
     
     cov_idx = np.random.choice(cfg.data.pop_size, cfg.data.num_test_cov, replace=False)
+
+    covs, outcomes = horizon_zero_distr(cfg.data.dep_len, data, cov_idx, alphas, 100 * cfg.data.pop_size)
+    print('outcomes shape:', outcomes.shape)
+    print(covs)
+    
+    plot_intervention_conditional_distributions(outcomes, np.zeros(cfg.data.dep_len), cfg.data.dep_len)
+    #save covariates
+    print(f'Covariates shape: {covs.shape}')
+    os.makedirs('data/sim-data', exist_ok=True)
+    np.savez_compressed(os.path.join('data/sim-data', 'covs.npz'), C=covs)
+
+
+    covs, outcomes = data_conditional_on_cov_and_treatment(cfg.data.dep_len, data, cov_idx, interventions[0], alphas, betas, gammas,
+                                                100 * cfg.data.pop_size, var_X = cfg.data.covariate_var,
+                                                mean_diff_X = cfg.data.covariate_mean_difference, p_X= cfg.data.covariate_mixture_weight,
+                                                model_X = cfg.data.covariate_model)  
+    print('outcomes shape:', outcomes.shape)
+    plot_intervention_conditional_distributions(outcomes, interventions[0], cfg.data.dep_len)
 
     covs, outcomes = conditional_intervened_data(cfg.data.dep_len, data, cov_idx, interventions[0], alphas, gammas,
                                                 cfg.data.pop_size, var_X = cfg.data.covariate_var,
                                                 mean_diff_X = cfg.data.covariate_mean_difference, p_X= cfg.data.covariate_mixture_weight,
                                                 model_X = cfg.data.covariate_model)
     plot_intervention_conditional_distributions(outcomes, interventions[0], cfg.data.dep_len)
-
-    covs, outcomes = data_conditional_on_cov_and_treatment(cfg.data.dep_len, data, cov_idx, interventions[0], alphas, betas, gammas,
-                                                100 * cfg.data.pop_size, var_X = cfg.data.covariate_var,
-                                                mean_diff_X = cfg.data.covariate_mean_difference, p_X= cfg.data.covariate_mixture_weight,
-                                                model_X = cfg.data.covariate_model)
     print('outcomes shape:', outcomes.shape)
-    plot_intervention_conditional_distributions(outcomes, interventions[0], cfg.data.dep_len)
 
 
 @hydra.main(config_path="../../conf", config_name="config", version_base=None)
 def main(cfg: DictConfig):
-    create_training_data(cfg)
-
+    #create_training_data(cfg)
+    visualize_data(cfg)
 
 if __name__ == "__main__":
     seed = 21
